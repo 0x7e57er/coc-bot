@@ -617,15 +617,14 @@ class BlueStacks:
 class BlueStacksDevice(PcDevice):
     """BlueStacks 5 on this PC, always full screen and in front. Like the old completeid / XpIncrease
     scripts, the bot takes a picture of the screen itself (ImageGrab), finds the images on it and clicks
-    those screen pixels with the mouse: clicks, drags and the wheel to zoom. ADB is only used to start and
-    stop Clash of Clans (and to see whether it runs). The instance and its ADB port come from BlueStacks'
-    own settings; BlueStacks is started when it is not running (also when it was closed during a run), and
-    put in full screen (its F11) whenever it is not."""
+    those screen pixels with the mouse: clicks and drags. It zooms out with BlueStacks' own zoom key. ADB
+    is only used to start and stop Clash of Clans (and to see whether it runs). The instance and its ADB
+    port come from BlueStacks' own settings; BlueStacks is started when it is not running (also when it
+    was closed during a run), and put in full screen (its F11) whenever it is not."""
 
     kind = "bluestacks"
     supports_keys = False       # the troop cards show no keyboard keys in BlueStacks
     BOOT_SECONDS = 150
-    WHEEL_OUT = 500             # BlueStacks turns the wheel into a pinch: wheel up zooms out
     ui_scale = 1.2              # measured at 1920x1080 with 160 and 240 DPI: every button 1.2x the PC picture
     field_scale = 0.89          # village border at full zoom-out: half-width 656 game-space px vs the PC's 734
 
@@ -746,6 +745,17 @@ class BlueStacksDevice(PcDevice):
 
     def _screen(self, x, y):
         return x, y                     # full screen: a pixel of the picture is that pixel of the screen
+
+    def zoom_out(self, presses=2):
+        """BlueStacks' Zoom control for Clash of Clans (its game controls): holding the Down arrow pinches two
+        fingers together, and one press zooms out completely. The mouse wheel goes to the game instead and
+        stops halfway (the village twice as big, the airship off screen)."""
+        self.prepare()
+        for _ in range(presses):
+            self._kb.press(self._Key.down)
+            time.sleep(0.4)
+            self._kb.release(self._Key.down)
+            time.sleep(0.4)
 
     def key(self, name):
         if name in ("esc", "back"):     # Esc leaves BlueStacks' full screen

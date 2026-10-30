@@ -8,8 +8,9 @@ airship by the river, and over the Raid Map / Raid Info button. One account:
   is attacked again until it is; the last four after swiping the map up; Capital Peak once it opens)
   -> Attack -> zoom out and pan fully down and right: the deploy strip along the district's lower-right
   side is then always at the same place -> the miners on one spot of it (more taps along the strip as
-  backup), the spells on the same spot -> the battle ends -> Map: the raid map again, until no raid
-  attack is left.
+  backup), the spells on the same spot -> the game is closed and opened again with ADB (no waiting for
+  the battle to end) -> the village: the airship again, until no raid attack is left. The army is set
+  on the first visit only.
 """
 
 import datetime as dt
@@ -55,6 +56,7 @@ PAN = ((1466, 784), (623, 268))
 DEPLOY = (586, 643)
 BACKUP = [(-36, 22), (36, -22), (10, 16), (-10, -16), (-103, 64), (103, -64), (-183, 113), (183, -113)]
 BATTLE_CARDS = [("raid/battle_miner", 10), ("raid/battle_frost", 1), ("raid/battle_graveyard", 2)]
+CLOSE_AFTER = 2.0                  # seconds from the last deploy to closing the game (the taps reach the server)
 
 
 def window(now=None):
@@ -214,10 +216,15 @@ def set_army(bot):
     """Change Capital Army (the button bottom left of the Capital and of the raid map): delete the army,
     then Super Miners only (as many as fit), 1 Frost and 2 Graveyard, Save. True when it was saved; when
     a card is missing the window is cancelled and the army stays as it was."""
-    if not bot.tap_template("raid/army_button", timeout=5):
-        return False
-    title = bot.wait("raid/army_title", 8)
+    title = None
+    for _ in range(3):                  # a tap while the Capital is still flying in is lost: again
+        if not bot.tap_template("raid/army_button", timeout=5):
+            break
+        title = bot.wait("raid/army_title", 5)
+        if title:
+            break
     if not title:
+        bot.save_error("raid-army-window")
         return False
     if bot.find("raid/army_trash"):                          # red while the army has units
         bot.tap_template("raid/army_trash", timeout=2, after=0.8)
@@ -431,26 +438,9 @@ def deploy(bot):
         control.sleep(0.4)
 
 
-def finish_battle(bot, timeout=240):
-    """Wait until the raid battle is over and the raid map is back. True when it is."""
-    end = time.monotonic() + timeout
-    while time.monotonic() < end:
-        f = bot.shot()
-        if _find(f, "raid/attacking_title"):
-            return True
-        for k in ("raid/battle_end", "raid/return_map"):
-            m = vision.templates.has(k) and _find(f, k)
-            if m:
-                bot.tap_match(m)
-                control.sleep(1.5)
-                break
-        control.sleep(1.0)
-    bot.save_error("raid-battle-end")
-    return False
-
-
 def restart(bot):
-    """Close the game and open it again (to get out of a screen the bot does not know)."""
+    """Close the game and open it again (after deploying, and to get out of a screen the bot does not
+    know); the village is on screen afterwards."""
     bot.device.close_game()
     end = time.monotonic() + 20
     while bot.device.is_game_running() and time.monotonic() < end:
@@ -470,7 +460,8 @@ def leave(bot):
 
 # ----------------------------------------------------------------------------- one account
 def run(bot, account, max_attacks=6):
-    """Use this account's raid attacks. Returns the number of raid attacks made."""
+    """Use this account's raid attacks. Each one starts in the village (the airship -> the raid map) and
+    ends with the game closed and opened again once everything is deployed. Returns the number made."""
     active, _, _ = window()
     if not active:
         return 0
@@ -478,83 +469,79 @@ def run(bot, account, max_attacks=6):
     done = _done(bot)
     if done.get(name) == "done":
         return 0
-    badge, left = find_airship(bot)
-    if badge is None:
-        log.info("%s: no raid attack left this Raid Weekend", name)
-        done[name] = "done"
-        _save_state(bot)
-        return 0
-    screen = open_capital(bot, badge)
-    if screen == "raid/next_raid":                   # the summary of the last raid: Next Raid
-        bot.tap_template("raid/next_raid", timeout=3)
-        screen = _wait_any(bot, ["raid/attacking_title"], 15)
-    if screen is None:
-        log.info("%s: the Clan Capital did not open (a game tutorial still pending?) - skipped this Raid "
-                 "Weekend", name)
-        bot.save_error("raid-no-capital")
-        done[name] = "done"                          # not tried again and again this weekend
-        _save_state(bot)
-        restart(bot)
-        return 0
-    left = attacks_left(bot.shot())
-    if left == 0:
-        log.info("%s: no raid attack left this Raid Weekend", name)
-        done[name] = "done"
-        _save_state(bot)
-        leave(bot)
-        return 0
-    log.info("%s: %s raid attack(s) left - setting the army: Super Miners, 1 Frost, 2 Graveyard", name, left)
-    bot.status(account=name, action="Raid: setting the army")
-    if not set_army(bot):
-        log.warning("%s: the capital army was not changed - attacking with the army it has", name)
-    if screen != "raid/attacking_title" and not open_raid_map(bot):
-        log.info("%s: the raid map did not open", name)
-        bot.save_error("raid-no-map")
-        leave(bot)
-        return 0
-    made, failed = 0, 0
+    made, failed, army_set = 0, 0, False
     while made < max_attacks:
         control.checkpoint()
+        badge, left = find_airship(bot)
+        if badge is None:
+            log.info("%s: no raid attack left this Raid Weekend", name)
+            done[name] = "done"
+            break
+        screen = open_capital(bot, badge)
+        if screen == "raid/next_raid":               # the summary of the last raid: Next Raid
+            bot.tap_template("raid/next_raid", timeout=3)
+            screen = _wait_any(bot, ["raid/attacking_title"], 15)
+        if screen is None:
+            log.info("%s: the Clan Capital did not open (a game tutorial still pending?) - skipped this Raid "
+                     "Weekend", name)
+            bot.save_error("raid-no-capital")
+            done[name] = "done"                      # not tried again and again this weekend
+            restart(bot)
+            break
         left = attacks_left(bot.shot())
         if left == 0:
-            log.info("%s: no raid attack left", name)
+            log.info("%s: no raid attack left this Raid Weekend", name)
             done[name] = "done"
+            leave(bot)
+            break
+        if not army_set:
+            log.info("%s: %s raid attack(s) left - setting the army: Super Miners, 1 Frost, 2 Graveyard", name,
+                     left)
+            bot.status(account=name, action="Raid: setting the army")
+            if not set_army(bot):
+                log.warning("%s: the capital army was not changed - attacking with the army it has", name)
+            army_set = True
+        if screen != "raid/attacking_title" and not open_raid_map(bot):
+            log.info("%s: the raid map did not open", name)
+            bot.save_error("raid-no-map")
+            leave(bot)
             break
         bot.status(account=name, action=f"Raid attack {made + 1} ({left} left)")
         district = choose_district(bot)
+        if district is None and bot.tap_template("raid/next_raid", timeout=2):
+            _wait_any(bot, ["raid/attacking_title"], 15)         # this raid is over: on to the next clan
+            district = choose_district(bot)
         if district is None:
-            if bot.tap_template("raid/next_raid", timeout=2):
-                _wait_any(bot, ["raid/attacking_title"], 15)     # this raid is over: on to the next clan
-                continue
             log.info("%s: no district can be attacked now", name)
             bot.save_error("raid-no-district")
+            leave(bot)
             break
         status = start_attack(bot)
         if status == "not_allowed":
             log.info("%s: joined the clan after this Raid Weekend began - the game lets it raid only if promoted "
                      "(Elder) or the clan is Invite Only; skipped this weekend", name)
             done[name] = "done"
+            leave(bot)
             break
         if status == "failed":
             failed += 1
             log.info("%s: the raid attack on %s did not start", name, district)
+            _close_bar(bot)
+            leave(bot)
             if failed >= 2:
                 break
-            _close_bar(bot)
             continue
         log.info("%s: raid attack on %s", name, district)
         deploy(bot)
         made += 1
         bot.stats["raids"] = bot.stats.get("raids", 0) + 1
         _save_state(bot)
-        if not finish_battle(bot):
-            log.warning("%s: the raid battle did not end on the raid map - restarting the game", name)
-            restart(bot)
-            break
+        log.info("%s: army deployed - closing and restarting the game", name)
+        control.sleep(CLOSE_AFTER)
+        restart(bot)
     _save_state(bot)
     if made:
         log.info("%s: %d raid attack(s) made", name, made)
-    leave(bot)
     return made
 
 

@@ -45,7 +45,9 @@ starts the game it closes the Google Play Games store window that opens with it.
 (BlueStacks Settings > Advanced > Android Debug Bridge) and its screen set to 1920×1080 (Settings > Display).
 BlueStacks always runs **full screen** and in front (the bot presses its F11 when it is not): like the old
 completeid / XpIncrease scripts, the bot takes pictures of the screen itself, finds the images on them and clicks
-those screen pixels with the mouse - clicks, drags, the wheel to zoom out - so the PC's mouse is busy during a run. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
+those screen pixels with the mouse - clicks and drags - so the PC's mouse is busy during a run. It zooms out with
+the Down arrow, BlueStacks' own zoom key for Clash of Clans (its game controls; keep it there): the mouse wheel only
+zooms halfway, and the airship and the deploy spots are then off screen. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
 not running (also when it was closed during a run); the instance is read from BlueStacks' own settings.
 
 **Android emulator** (Device page → Android): set the emulator to 1920×1080 and switch on its ADB. Only adb
@@ -90,7 +92,8 @@ zoom out, the airship by the river → Clan Capital (the red "5 ⚔" over Raid M
 Army: delete it, Super Miners only, 1 Frost, 2 Graveyard, Save → Raid Map → the districts from the top down, each
 until it is destroyed (Builder's Workshop, Golem Quarry, Goblin Mines and Skeleton Park after swiping the map up;
 Capital Peak last) → zoom out, pan fully down and right → everything on one spot of the deploy strip along the
-district's lower-right side (more taps along the strip when a tap does not deploy) → Map, next attack. Set up and
+district's lower-right side (more taps along the strip when a tap does not deploy) → the game is closed and opened
+again with ADB (no waiting for the battle to end) → the airship again for the next attack. Set up and
 checked on BlueStacks at 1920×1080.
 
 ## Smart donations (Donate page)
