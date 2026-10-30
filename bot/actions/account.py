@@ -37,7 +37,35 @@ def same_name(a, b):
     return difflib.SequenceMatcher(None, la, lb).ratio() >= 0.6
 
 
-NOT_ACCOUNTS = ("login", "supercellid")
+NOT_ACCOUNTS = ("login", "supercellid", "switchid", "otherids")
+
+# BlueStacks draws the Supercell ID panel as an Android view of its own size (not the game's 1.2x): there the
+# name column is placed from the panel's "SWITCH ID" label - right of the account pictures, left of the gear
+SID_COLUMN = (-136, 96, 286)       # x and y from the label's centre, width (game-space px)
+
+
+def _name_column(bot, frame):
+    """The column of account names in the Supercell ID panel."""
+    if bot.device.kind != "bluestacks":
+        return bot.layout.region("sid.name_column")
+    dx, dy, w = (space.s(v) for v in SID_COLUMN)
+    m = vision.find(frame, "sid/switch_id_label")
+    if m:
+        bot.sid_column = (m.x + dx, w)
+        top = m.y + dy
+    else:
+        top = space.s(10)                           # the label scrolled away with the list
+    x, w = getattr(bot, "sid_column", None) or (space.w - space.s(378), w)
+    return x, top, w, space.h - top
+
+
+def _tap_button(bot, key, point):
+    """Tap a button where its picture is on this screen; its PC spot only when there is no picture of it."""
+    m = bot.find(key)
+    if m:
+        bot.tap_match(m)
+    else:
+        bot.tap_point(point)
 
 
 def _name_lines(frame, region):
@@ -64,7 +92,7 @@ def read_switcher(bot, frame=None):
     """Visible accounts in the panel: [(name, (x, y) to tap, name_box)]."""
     frame = bot.shot() if frame is None else frame
     out = []
-    for box in _name_lines(frame, bot.layout.region("sid.name_column")):
+    for box in _name_lines(frame, _name_column(bot, frame)):
         text, conf = vision.text_reader.read_line(frame, box)
         if text and conf > 0.5 and not any(w in normalise(text) for w in NOT_ACCOUNTS):
             out.append((text, (box[0] + box[2] // 2, box[1] + box[3] // 2), box))
@@ -105,21 +133,21 @@ def open_switcher(bot):
         # the menu opens on the tab used last
         bot.tap_point("home.settings")
         if bot.wait_any(["settings/title", "settings/close"], 4, interval=0.15)[0]:
-            if bot.exists("settings/title") or (bot.tap_point("profile.settings_tab") or
+            if bot.exists("settings/title") or (_tap_button(bot, "settings/tab", "profile.settings_tab") or
                                                 bot.wait("settings/title", 3, interval=0.15)):
                 break
         if not go_home(bot, 10):
             raise BotError("Not on the home village")
     else:
         raise BotError("Settings did not open")
-    bot.tap_point("settings.switch_id")
+    _tap_button(bot, "settings/switch_id", "settings.switch_id")    # the blue arrows next to Open
     if not bot.wait("sid/switch_id_label", 10, interval=0.15):
         raise BotError("Supercell ID panel did not open")
     # the list slides in: wait until the name column stops moving (max 1.2 s)
     prev = None
     for _ in range(12):
         f = bot.shot()
-        x, y, w, h = bot.layout.region("sid.name_column")
+        x, y, w, h = _name_column(bot, f)
         cur = f[y:y + h, x:x + w].astype("int16")
         if prev is not None and abs(cur - prev).mean() < 1.0:
             break
@@ -215,9 +243,12 @@ def switch_to(bot, account, state=None):
     if state is None:
         state = bot.state if bot.state is not None else {}
     state.pop("switcher_pages", None)                 # from the older, shorter scroll
-    # each screen scrolls the list its own amount per drag: remember the pages per screen size
+    # each screen scrolls the list its own amount per drag: remember the pages per screen size (and BlueStacks
+    # apart: its list is an Android view, it scrolls its own amount at 1920x1080 too)
     native = space.native or (1920, 1080)
-    pages = state.setdefault("switcher_at" if native == (1920, 1080) else f"switcher_at_{native[0]}x{native[1]}", {})
+    pc = native == (1920, 1080) and bot.device.kind != "bluestacks"
+    pages = state.setdefault("switcher_at" if pc else "switcher_at_bluestacks" if bot.device.kind == "bluestacks"
+                             else f"switcher_at_{native[0]}x{native[1]}", {})
 
     def try_page():
         frame = bot.shot()
@@ -236,7 +267,7 @@ def switch_to(bot, account, state=None):
     index = _list_index(bot, name)
     # accounts per page drag: 4 on the PC; on other screens estimated from the accounts found there
     ratios = sorted(_list_index(bot, n) / p for n, p in pages.items() if p and _list_index(bot, n) is not None)
-    per_page = ratios[len(ratios) // 2] if ratios and native != (1920, 1080) else ROWS_PER_PAGE
+    per_page = ratios[len(ratios) // 2] if ratios and not pc else ROWS_PER_PAGE
     target = pages.get(name, int(index // per_page) if index is not None else 0)
     if index is not None and abs(target - index / per_page) > 1.5:
         target = int(index // per_page)               # a page learned with an older scroll: from the list

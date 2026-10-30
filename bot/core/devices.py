@@ -2,8 +2,8 @@
 
   PcDevice          Google Play Games on Windows (PrintWindow capture + real mouse/keyboard)
   AdbDevice         An Android emulator over ADB: BlueStacks, LDPlayer, MuMu, Nox, MEmu
-  BlueStacksDevice  BlueStacks 5 on this PC (the default), full screen: screen capture + mouse like
-                    Google Play Games; ADB only starts and stops the game
+  BlueStacksDevice  BlueStacks 5 on this PC (the default), full screen: pictures of the screen itself +
+                    the mouse, like the old completeid / XpIncrease scripts; ADB only starts and stops the game
 
 The bot works in "game space" (see space.py): the device image scaled uniformly
 to the profile's height (1080), so any window size or aspect ratio works.
@@ -615,8 +615,9 @@ class BlueStacks:
 
 
 class BlueStacksDevice(PcDevice):
-    """BlueStacks 5 on this PC, always full screen. Like Google Play Games, the bot sees its window (screen
-    capture) and plays with the mouse: clicks, drags and the wheel to zoom. ADB is only used to start and
+    """BlueStacks 5 on this PC, always full screen and in front. Like the old completeid / XpIncrease
+    scripts, the bot takes a picture of the screen itself (ImageGrab), finds the images on it and clicks
+    those screen pixels with the mouse: clicks, drags and the wheel to zoom. ADB is only used to start and
     stop Clash of Clans (and to see whether it runs). The instance and its ADB port come from BlueStacks'
     own settings; BlueStacks is started when it is not running (also when it was closed during a run), and
     put in full screen (its F11) whenever it is not."""
@@ -731,14 +732,20 @@ class BlueStacksDevice(PcDevice):
             raise RuntimeError("BlueStacks is not in full screen: press F11 in BlueStacks")
 
     def prepare(self):
+        """BlueStacks full screen and in front: the screen is then the game."""
         if not self.is_full_screen():
             self.full_screen()
-        super().prepare()
+        if not self.window.is_foreground():
+            self.window.focus()
 
     def _capture_native(self):
-        if not self.is_full_screen():
-            self.full_screen()
-        return super()._capture_native()
+        """The screen itself, as the monitor shows it."""
+        from PIL import ImageGrab
+        self.prepare()
+        return cv2.cvtColor(np.asarray(ImageGrab.grab()), cv2.COLOR_RGB2BGR)
+
+    def _screen(self, x, y):
+        return x, y                     # full screen: a pixel of the picture is that pixel of the screen
 
     def key(self, name):
         if name in ("esc", "back"):     # Esc leaves BlueStacks' full screen

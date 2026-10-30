@@ -1364,6 +1364,21 @@
     ],
     "threshold": 0.85
   },
+  "popup/close_x~2": {
+    "box": [
+      1694,
+      44,
+      50,
+      52
+    ],
+    "region": [
+      1220,
+      0,
+      700,
+      330
+    ],
+    "threshold": 0.85
+  },
   "popup/close_x~tournament": {
     "box": [
       1548,
@@ -2084,6 +2099,21 @@
     ],
     "threshold": 0.85
   },
+  "settings/close~2": {
+    "box": [
+      1694,
+      44,
+      50,
+      52
+    ],
+    "region": [
+      1570,
+      0,
+      350,
+      200
+    ],
+    "threshold": 0.85
+  },
   "settings/switch_id": {
     "box": [
       1202,
@@ -2099,6 +2129,36 @@
     ],
     "threshold": 0.85
   },
+  "settings/switch_id~2": {
+    "box": [
+      1341,
+      138,
+      66,
+      66
+    ],
+    "region": [
+      1281,
+      78,
+      186,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "settings/tab": {
+    "box": [
+      1520,
+      57,
+      133,
+      38
+    ],
+    "region": [
+      1460,
+      0,
+      253,
+      155
+    ],
+    "threshold": 0.85
+  },
   "settings/title": {
     "box": [
       1380,
@@ -2111,6 +2171,21 @@
       60,
       270,
       130
+    ],
+    "threshold": 0.85
+  },
+  "settings/title~2": {
+    "box": [
+      1520,
+      57,
+      133,
+      38
+    ],
+    "region": [
+      1460,
+      0,
+      253,
+      155
     ],
     "threshold": 0.85
   },
@@ -2201,6 +2276,21 @@
       325,
       240,
       205
+    ],
+    "threshold": 0.85
+  },
+  "sid/switch_id_label~2": {
+    "box": [
+      1624,
+      411,
+      92,
+      66
+    ],
+    "region": [
+      1564,
+      351,
+      212,
+      186
     ],
     "threshold": 0.85
   },

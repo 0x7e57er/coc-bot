@@ -43,9 +43,9 @@ starts the game it closes the Google Play Games store window that opens with it.
 
 **BlueStacks** (Device page → BlueStacks, the default): Clash of Clans installed in BlueStacks 5, its ADB switched on
 (BlueStacks Settings > Advanced > Android Debug Bridge) and its screen set to 1920×1080 (Settings > Display).
-BlueStacks always runs **full screen** (the bot presses its F11 when it is not): like Google Play Games, the bot
-sees the BlueStacks window (screen capture) and plays with the mouse - clicks, drags, the wheel to zoom out - so the
-PC's mouse is busy during a run. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
+BlueStacks always runs **full screen** and in front (the bot presses its F11 when it is not): like the old
+completeid / XpIncrease scripts, the bot takes pictures of the screen itself, finds the images on them and clicks
+those screen pixels with the mouse - clicks, drags, the wheel to zoom out - so the PC's mouse is busy during a run. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
 not running (also when it was closed during a run); the instance is read from BlueStacks' own settings.
 
 **Android emulator** (Device page → Android): set the emulator to 1920×1080 and switch on its ADB. Only adb

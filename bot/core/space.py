@@ -30,6 +30,7 @@ log = logging.getLogger("bot")
 class Space:
     def __init__(self):
         self.native = None          # (w, h) of the device in its own pixels
+        self._for = None            # (w, h, ui_scale, field_scale) the mapping was made for
         self.scale = 1.0            # native pixels per game-space pixel
         self.field = 1.0            # battlefield size in game space relative to the base screen
         self.w, self.h = profile.size
@@ -42,8 +43,9 @@ class Space:
         bw, bh = self.base
         s = min(native_w / bw, native_h / bh) * ui_scale
         w, h = round(native_w / s), round(native_h / s)
-        if (native_w, native_h, ui_scale, field_scale) != self.native:
-            self.native = (native_w, native_h, ui_scale, field_scale)
+        if (native_w, native_h, ui_scale, field_scale) != self._for:
+            self._for = (native_w, native_h, ui_scale, field_scale)
+            self.native = (native_w, native_h)
             self.scale, self.w, self.h, self.field = s, w, h, field_scale
             log.info("Game screen %dx%d (aspect %.2f, interface x%.2f, village x%.2f) -> game space %dx%d, "
                      "scale %.3f", native_w, native_h, native_w / native_h, ui_scale, field_scale, w, h, s)
