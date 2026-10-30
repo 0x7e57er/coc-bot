@@ -2,7 +2,8 @@
 
   PcDevice          Google Play Games on Windows (PrintWindow capture + real mouse/keyboard)
   AdbDevice         An Android emulator over ADB: BlueStacks, LDPlayer, MuMu, Nox, MEmu
-  BlueStacksDevice  BlueStacks 5 on this PC (the default): found and started by the bot, then ADB
+  BlueStacksDevice  BlueStacks 5 on this PC (the default), full screen: screen capture + mouse like
+                    Google Play Games; ADB only starts and stops the game
 
 The bot works in "game space" (see space.py): the device image scaled uniformly
 to the profile's height (1080), so any window size or aspect ratio works.
@@ -18,6 +19,7 @@ import time
 import cv2
 import numpy as np
 import win32api
+import win32gui
 
 from .space import space
 from .window import GameWindow
@@ -270,12 +272,14 @@ class PcDevice(Device):
         self._pg.write(text, interval=0.1)       # the game drops characters typed faster
         return True
 
+    WHEEL_OUT = -500        # mouse wheel that zooms out (Google Play Games: wheel down)
+
     def zoom_out(self, steps=10):
         self.prepare()
         w, h = self.native_size()
         self._pg.moveTo(*self._screen(w // 2, h // 2))
         for _ in range(steps):
-            self._pg.scroll(-500)
+            self._pg.scroll(self.WHEEL_OUT)
             time.sleep(0.03)
 
     def is_connected(self):
@@ -610,40 +614,59 @@ class BlueStacks:
                          creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
 
 
-class BlueStacksDevice(AdbDevice):
-    """BlueStacks 5 on this PC over ADB. The instance and its ADB port are read from BlueStacks' own
-    settings, so nothing has to be typed in; BlueStacks is started when it is not running (also when it
-    was closed during a run), and only that instance is used, never a phone that is on ADB as well."""
+class BlueStacksDevice(PcDevice):
+    """BlueStacks 5 on this PC, always full screen. Like Google Play Games, the bot sees its window (screen
+    capture) and plays with the mouse: clicks, drags and the wheel to zoom. ADB is only used to start and
+    stop Clash of Clans (and to see whether it runs). The instance and its ADB port come from BlueStacks'
+    own settings; BlueStacks is started when it is not running (also when it was closed during a run), and
+    put in full screen (its F11) whenever it is not."""
 
+    kind = "bluestacks"
+    supports_keys = False       # the troop cards show no keyboard keys in BlueStacks
     BOOT_SECONDS = 150
-    ui_scale = 1.2          # measured at 1920x1080 with 160 and 240 DPI: every button 1.2x the PC picture
-    field_scale = 0.89      # village border at full zoom-out: half-width 656 game-space px vs the PC's 734
+    WHEEL_OUT = 500             # BlueStacks turns the wheel into a pinch: wheel up zooms out
+    ui_scale = 1.2              # measured at 1920x1080 with 160 and 240 DPI: every button 1.2x the PC picture
+    field_scale = 0.89          # village border at full zoom-out: half-width 656 game-space px vs the PC's 734
 
     def __init__(self, instance="", adb_path="", package=COC_PACKAGE):
         self.bs = BlueStacks.find()
         if not self.bs:
             raise RuntimeError("BlueStacks 5 is not installed on this PC")
         self.inst = self.bs.instance(instance)
+        super().__init__("", self.inst["title"])
         # the PC's own adb first: two adb versions keep restarting each other's server (and drop the phone)
-        super().__init__(f"127.0.0.1:{self.inst['port']}", adb_path or find_adb() or self.bs.adb, package)
+        self.adb = find_adb(adb_path) or find_adb() or self.bs.adb
+        self.serial = f"127.0.0.1:{self.inst['port']}"
+        self.package = package
+        self.connect()
 
     def describe(self):
         title = self.inst["title"]
-        return f"{title if 'bluestacks' in title.lower() else 'BlueStacks ' + title} ({self.serial})"
+        return f"{title if 'bluestacks' in title.lower() else 'BlueStacks ' + title} (full screen)"
+
+    # --- ADB: start and stop only --------------------------------------------------------
+    def _run(self, *args, timeout=15):
+        try:
+            r = subprocess.run([self.adb, "-s", self.serial, *args], capture_output=True, timeout=timeout,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
+        except subprocess.TimeoutExpired:
+            return ""
+        return r.stdout.decode(errors="replace")
 
     def _booted(self):
         try:
             subprocess.run([self.adb, "connect", self.serial], capture_output=True, timeout=15,
                            creationflags=subprocess.CREATE_NO_WINDOW)
-            return self._run("shell", "getprop", "sys.boot_completed", timeout=10).strip() == "1"
         except subprocess.TimeoutExpired:
             return False
+        return self._run("shell", "getprop", "sys.boot_completed", timeout=10).strip() == "1"
 
     def connect(self):
+        """BlueStacks running (started when it is not), Android booted and the window full screen."""
         if not self._booted():
             if not self.bs.adb_enabled():
                 raise RuntimeError("ADB is off in BlueStacks: switch it on in BlueStacks Settings > Advanced > "
-                                   "Android Debug Bridge")
+                                   "Android Debug Bridge (the bot starts and stops the game with it)")
             log.info("Starting BlueStacks (%s)...", self.inst["name"])
             self.bs.start(self.inst["name"])
             end = time.monotonic() + self.BOOT_SECONDS
@@ -654,17 +677,73 @@ class BlueStacksDevice(AdbDevice):
                 self.inst = self.bs.instance(self.inst["name"])      # the port can change when it starts
                 self.serial = f"127.0.0.1:{self.inst['port']}"
             log.info("BlueStacks is up")
-        super().connect()
+        self.full_screen()
         from .profile import profile
         if self.inst["size"] and self.inst["size"] != profile.size:
             log.warning("BlueStacks' screen is %dx%d: set it to %dx%d (BlueStacks Settings > Display), the size the "
                         "bot is checked with, so buttons, numbers and the village are found reliably",
                         *self.inst["size"], *profile.size)
 
+    def is_game_running(self):
+        """Running and on screen (in front of other Android apps)."""
+        if not self._run("shell", "pidof", self.package).strip():
+            return False
+        top = self._run("shell", "dumpsys activity activities | grep -m 1 -E 'topResumedActivity|mResumedActivity'")
+        return self.package in top
+
     def launch_game(self):
-        if not self._booted():          # BlueStacks was closed: start it again first
+        """Start the game, or bring it to the front of BlueStacks (BlueStacks first, when it was closed)."""
+        if not self._booted():
             self.connect()
-        super().launch_game()
+        self._run("shell", "monkey", "-p", self.package, "-c", "android.intent.category.LAUNCHER", "1")
+
+    def close_game(self):
+        self._run("shell", "am", "force-stop", self.package)
+
+    def tidy_up(self):
+        self.full_screen()
+
+    # --- the window: always full screen --------------------------------------------------
+    def is_full_screen(self):
+        hwnd = self.window.find()
+        if not hwnd or win32gui.IsIconic(hwnd):
+            return False
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        return (left, top, right - left, bottom - top) == (0, 0, win32api.GetSystemMetrics(0),
+                                                            win32api.GetSystemMetrics(1))
+
+    def full_screen(self):
+        """Put the BlueStacks window in full screen (its F11) if it is not. Raises when that fails."""
+        end = time.monotonic() + 30
+        while not self.window.find():                    # the window comes a moment after Android
+            if time.monotonic() > end:
+                raise RuntimeError(f"BlueStacks window '{self.inst['title']}' not found")
+            time.sleep(1)
+        for _ in range(3):
+            if self.is_full_screen():
+                return
+            log.info("Putting BlueStacks in full screen")
+            self.window.focus()
+            self._kb.press(self._Key.f11)
+            self._kb.release(self._Key.f11)
+            time.sleep(2.0)
+        if not self.is_full_screen():
+            raise RuntimeError("BlueStacks is not in full screen: press F11 in BlueStacks")
+
+    def prepare(self):
+        if not self.is_full_screen():
+            self.full_screen()
+        super().prepare()
+
+    def _capture_native(self):
+        if not self.is_full_screen():
+            self.full_screen()
+        return super()._capture_native()
+
+    def key(self, name):
+        if name in ("esc", "back"):     # Esc leaves BlueStacks' full screen
+            return False
+        return super().key(name)
 
 
 def make_device(settings):

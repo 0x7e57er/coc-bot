@@ -42,9 +42,11 @@ price changes are fine) and gems are never spent. Builder Base attacks are ended
 starts the game it closes the Google Play Games store window that opens with it.
 
 **BlueStacks** (Device page → BlueStacks, the default): Clash of Clans installed in BlueStacks 5, its ADB switched on
-(BlueStacks Settings > Advanced > Android Debug Bridge) and its screen set to 1920×1080 (Settings > Display). The
-instance and its ADB address are read from BlueStacks' own settings, BlueStacks is started when it is not running
-(also when it was closed during a run), and only that instance is used even when a phone is on ADB too.
+(BlueStacks Settings > Advanced > Android Debug Bridge) and its screen set to 1920×1080 (Settings > Display).
+BlueStacks always runs **full screen** (the bot presses its F11 when it is not): like Google Play Games, the bot
+sees the BlueStacks window (screen capture) and plays with the mouse - clicks, drags, the wheel to zoom out - so the
+PC's mouse is busy during a run. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
+not running (also when it was closed during a run); the instance is read from BlueStacks' own settings.
 
 **Android emulator** (Device page → Android): set the emulator to 1920×1080 and switch on its ADB. Only adb
 is used (screenshots + taps), nothing is mirrored or recorded and the PC stays free. The running emulator is

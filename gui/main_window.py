@@ -7,7 +7,8 @@ import os
 import threading
 
 import win32gui
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSequentialAnimationGroup, Qt, QTimer, Signal
+from PySide6.QtCore import (QEasingCurve, QEvent, QPropertyAnimation, QRectF, QSequentialAnimationGroup, Qt, QTimer,
+                            Signal)
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QShortcut
 from PySide6.QtWidgets import (QApplication, QFrame, QGraphicsOpacityEffect, QHBoxLayout, QLabel, QMainWindow,
                                QSplitter, QSplitterHandle, QVBoxLayout, QWidget)
@@ -195,6 +196,7 @@ class MainWindow(QMainWindow):
         setup_logging(self.bridge)
         self.settings = config.load_settings()
         self.accounts = config.load_accounts()
+        self._accounts_at = config.accounts_changed_at()
         profile.use(self.settings.get("profile", profile.name))
         vision.templates.reload()
         layout.reload()
@@ -432,11 +434,31 @@ class MainWindow(QMainWindow):
         for p in self.pages:
             p.apply(self.settings, self.accounts)
 
+    def _reload_accounts_if_changed(self):
+        """accounts.json was changed outside this window (restored, edited by hand, another window): take
+        that list over instead of writing this window's old one back over it. Not during a run."""
+        if (self.runner and self.runner.is_alive()) or config.accounts_changed_at() == self._accounts_at:
+            return
+        self.collect()                                  # keep the settings on screen
+        self.accounts = config.load_accounts()
+        self._accounts_at = config.accounts_changed_at()
+        for p in self.pages:
+            p.load(self.settings, self.accounts)
+        self._refresh_details()
+        log.info("The account list was changed outside the window: loaded it (%d accounts)", len(self.accounts))
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.ActivationChange and self.isActiveWindow():
+            self._reload_accounts_if_changed()
+
     def save(self, quiet=True):
+        self._reload_accounts_if_changed()
         self.collect()
         try:
             config.save_settings(self.settings)
             config.save_accounts(self.accounts)
+            self._accounts_at = config.accounts_changed_at()
         except OSError as e:
             log.warning("Could not save the settings: %s", e)
             self.toasts.show("error", "Settings not saved", str(e), 8000)
@@ -509,7 +531,7 @@ class MainWindow(QMainWindow):
         self.status_pill.set_state("running", title)
         self.status_pill.start_clock()
         self.toasts.show("success", "Run started", f"{title} on {device}.", 3500)
-        if self.settings.get("minimize_on_start") and self.settings["device"]["type"] == "pc":
+        if self.settings.get("minimize_on_start") and self.settings["device"]["type"] in ("pc", "bluestacks"):
             self.showMinimized()
 
     def stop(self):
@@ -573,6 +595,7 @@ class MainWindow(QMainWindow):
     def _finished(self, reason):
         self._set_running(False)
         config.save_accounts(self.accounts)     # Town Hall levels learned during the run
+        self._accounts_at = config.accounts_changed_at()
         self.accounts_tab.load(self.settings, self.accounts)
         self._dismiss_wait()
         pill = self.status_pill

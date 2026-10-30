@@ -160,6 +160,14 @@ def load_accounts():
     return copy.deepcopy(DEFAULT_ACCOUNTS)
 
 
+def accounts_changed_at():
+    """When accounts.json was last written (by the window, by hand or restored), or None."""
+    try:
+        return os.path.getmtime(ACCOUNTS_PATH)
+    except OSError:
+        return None
+
+
 def save_accounts(accounts):
     clean = [{k: v for k, v in a.items() if not k.startswith("_")} for a in accounts]   # _x = this run only
     with _lock, open(ACCOUNTS_PATH, "w", encoding="utf-8") as f:

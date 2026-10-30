@@ -28,7 +28,7 @@ class DeviceTab(QWidget):
 
         # --- device ---
         dev = Card("Where does Clash of Clans run?", icon="plug")
-        self.bs_card = ChoiceCard("BlueStacks", "BlueStacks 5 on this PC: the bot starts it and finds its ADB address",
+        self.bs_card = ChoiceCard("BlueStacks", "BlueStacks 5 on this PC, full screen: the bot sees it and uses the mouse",
                                   "box", T.GREEN)
         self.pc_card = ChoiceCard("Google Play Games", "On this PC: the bot clicks in the game window", "monitor",
                                   T.GOLD)
@@ -47,7 +47,7 @@ class DeviceTab(QWidget):
         self.bs = None
         self.bs_instance = Combo()
         bl.addWidget(field("BlueStacks instance", self.bs_instance,
-                           "BlueStacks is started when it is not running; its ADB address is read from BlueStacks."))
+                           "Started and put in full screen (F11) when needed. ADB only starts and stops the game."))
         self.bs_note = Banner("", "warning")
         bl.addWidget(self.bs_note)
         dev.add(self.bs_box)
@@ -124,7 +124,7 @@ class DeviceTab(QWidget):
         misc = Card("Behaviour", icon="sliders", color=T.GREEN)
         self.minimize = Toggle()
         self.error_shots = Toggle()
-        misc.add(SettingRow("Minimize this window on start", "Only with Google Play Games on this PC",
+        misc.add(SettingRow("Minimize this window on start", "With BlueStacks or Google Play Games on this PC",
                             self.minimize))
         misc.add(divider())
         misc.add(SettingRow("Save a screenshot when something goes wrong", "Stored in logs/errors",
