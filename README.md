@@ -1,141 +1,359 @@
-# Coc-Bot
+# COC bot: loot, upgrade, raid and donate with all accounts
 
-Clash of Clans bot with a window, for **BlueStacks 5** on this PC (the default), Google Play Games
-on PC, or Android over ADB (LDPlayer, MuMu, Nox or a phone).
+A small Clash of Clans bot for **BlueStacks 5**, written in Python like Coc-Bot. It opens each of your
+accounts in turn and either:
+
+- **Loot**: loots it until its storages are full;
+- **Capital raid**: uses its Clan Capital raid attacks (Raid Weekend only);
+- **Raid + loot**: does both, raid attacks first;
+- **Loot + upgrade**: starts upgrades with its free builders, loots until full, then upgrades again;
+- **Loot + walls**: puts the gold and elixir above what you keep into walls (both resources), loots until
+  full, then does it again.
+
+Then it goes on to the next account. Or:
+
+- **Loot + donate**: your accounts request troops and your main account donates to them, paying with
+  elixir; when the main account's elixir runs low it loots, and your partner account loots with it.
+
+- **ADB** is used only to start and stop Clash of Clans (and to see whether it runs).
+- Everything else uses the **screen itself**. The bot takes a screenshot, finds the game's buttons,
+  numbers and buildings on it as images, and clicks those spots with the mouse.
+- The bot works at your **PC's current screen resolution**. BlueStacks runs full screen, and the bot
+  scales whatever size the screen is.
 
 ## Setup (once)
 
-1. Install **Python 3.10+** from python.org (tick "Add python.exe to PATH").
-2. Double-click **`setup.bat`**. It installs the packages from `requirements.txt` (no virtual
-   environment), checks everything with `tools/check_setup.py` and can put a **Coc-Bot** shortcut on
-   the desktop.
+1. Install Python 3.10+ (tick "Add python.exe to PATH") and run `setup.bat`.
+2. In BlueStacks 5 settings:
+   - **Advanced > Android Debug Bridge**: on.
+   - **Display**: set the resolution to the same size as your Windows screen (for example
+     1920×1080), so BlueStacks full screen fills the screen with no black bars.
+   - Keep BlueStacks' **game controls** for Clash of Clans. The Down arrow is its zoom-out key, and
+     the bot uses it.
+3. Put your accounts in `config/accounts.json`, in the **same order as the game's Supercell ID list**:
 
-No PaddleOCR is needed: numbers are read with the game's own digit images, and the few words
-(account names, request messages) with RapidOCR, which is small and starts in a few seconds.
+   ```json
+   [
+     {"name": "Buggu01", "th": 18, "enabled": true},
+     {"name": "Omishrisha", "th": 16, "enabled": true},
+     {"name": "Buggu8", "th": 11, "enabled": false}
+   ]
+   ```
 
-To check an existing install at any time: `python tools/check_setup.py`
+   - `name`: the account name as the Supercell ID list shows it.
+   - `th`: the account's Town Hall level. It picks the full storage and the minimum loot below. If
+     it is `0`, the bot reads it from the account list.
+   - `enabled`: `false` means this account is skipped.
+   - Optional `"full_at": {"elixir": 20000000}`: this account's own full amount, which overrides the
+     table.
 
-## Start
+4. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
+   bot presses Use on the top recipe of the Saved Recipes tab before the first attack on each account.
 
-Double-click the **Coc-Bot** desktop shortcut or `run.bat`, or run `python main.py`.
+## Run
 
-## Modes
+Double-click `run.bat` (or `python main.py`). The window opens maximized. It has a sidebar and a
+top bar with **Save**, **Check setup** (starts the game and reads the resources, without
+attacking), **Start**, **Pause (F9)** and **Stop (F10)**. Its pages:
 
-| Mode | What it does |
+- **Dashboard**:
+  - **What to run**: Loot, Capital raid, Raid + loot, Loot + upgrade or Loot + donate. The choice is saved
+    at once.
+  - **Start from account**: the account the run starts with. It follows the run, so it always shows
+    the account the bot is on, and after a stop the next run goes on from there. After a whole round
+    it is back at the first account. You can change it whenever the bot is stopped. Loot + donate does
+    not use it: it always starts on the main account.
+  - Whether Raid Weekend is on, and how long it lasts, or when the next one starts.
+  - **Now**: the account, its Town Hall and its place in the list, the action (searching, battle,
+    raid attack 2 on Wizard Valley ...), how full the account is, and the last base's loot.
+  - **This run**: attacks, raid attacks, searches, run time, loot gained and accounts done (in Loot +
+    donate: requests sent and units donated instead of raid attacks and accounts done).
+  - Every ticked account's status this run (waiting / looting / full / raided / requested / donated ...).
+  - Recent activity.
+- **Accounts**: tick, name, Town Hall and an optional own full elixir. You can search, add, remove,
+  move and tick all. Keep the game's list order.
+- **Loot settings**: run, when an account is full, choosing a base, Loot + donate, battle, army, Loot +
+  upgrade, Clan Capital raid and device. Each setting is explained under its name.
+- **Storage & loot**: full storage and minimum loot per Town Hall.
+- **Log**: the whole log, the log file and the error screenshots. **Every step (detailed)** (the default)
+  also shows each step the bot starts ("Step: Searching #3"), each screen it sees and each decision, in
+  grey. **Main events** shows only the main lines, **Warnings and errors** only problems. The log file
+  `logs/bot.log` always has everything.
+
+Save (Ctrl+S) writes everything to `config/`, and Start saves too. The settings pages are locked
+while the bot runs. Pages slide in, the sidebar highlight glides, numbers count up, bars fill
+smoothly, and short notices appear at the bottom right.
+
+Without the window:
+
+```
+python main.py --start              the window, with Start pressed at once
+python main.py --cli                loot every enabled account until full, in the console
+python main.py --cli --from 5       start with account #5 of accounts.json
+python main.py --cli --rounds 0     keep going round the accounts forever
+python main.py --cli --mode raid    Clan Capital raids in the console (or loot / raid_loot / loot_upgrade /
+                                    loot_donate)
+python main.py --check              only check the setup, and save what the bot sees to logs/check.png
+```
+
+- **F9**: pause / continue. **F10**: stop. Pushing the mouse into a screen corner also stops the bot.
+  When a run ends (F10 too), the window comes back in front of BlueStacks.
+- The mouse is busy while the bot runs, because it clicks on BlueStacks. To use the PC, press F9
+  first. If another window takes the front anyway, the bot waits and never clicks on it.
+
+## The flow (copied from Coc-Bot's "Loot all accounts")
+
+1. BlueStacks is started if it is not running and put in full screen (F11). Clash of Clans is
+   started with ADB (`monkey`) and the bot waits for the home village. Popups, chests, results,
+   tutorials, "Try Again" / "Reload", maintenance breaks and the Builder Base are all handled on
+   the way back to the village.
+2. **Switch account**: profile picture > Settings > Switch ID. One 0.5 s drag moves the list exactly 4
+   accounts, so the bot drags straight to the account's page. It reads the names there and taps the
+   right one.
+3. **Full?** The bot reads gold, elixir and dark elixir on the village. An account is full when the
+   watched resource (elixir by default) reaches `full_at` for its Town Hall in `settings.json`. If
+   the storages stop growing for 2 attacks, the account also counts as full.
+4. **Army**: before the first attack: Battle > Edit Army > the **Saved Recipes** tab > **Use** on the first
+   (top) recipe. The game asks to confirm only when the Clan Castle has troops; then the bot presses Okay. If
+   there is no recipe to use, the account attacks with the army it has, and the log says so.
+5. **Search**: Attack > Find a Match > Attack!. Then it presses Next until a base has at least the
+   `min_loot` for this account's Town Hall. The loot numbers are read with the game's own digit
+   images. It gives up after 150 searches.
+6. **Attack** (`edrag_clone` plan): the bot finds the base's buildings and puts a deploy ring just
+   outside the red area. It reads the troop bar by what its cards are, not by their place. Cards with
+   an "x11" count left of the heroes are troops; cards without a count are the siege machine and the
+   heroes; cards with a count after them are spells; the empty slots are skipped. So any army works.
+   The troops go down in 3 groups (left, top, right), with a Clone cast on each group as it lands. Then
+   the siege machine and every hero go behind the groups, then the other spells on the troops' way.
+   Every tap is checked against the card. A spot that does not deploy is moved and tried again.
+7. **End**: the battle is surrendered when none of the loot left in the base (gold, elixir and dark
+   elixir) has gone down for `end_when_loot_stops` seconds. Troops busy on gold mines still count as
+   looting. At the latest it ends after `battle_seconds` (60). Then the bot goes home and starts again from
+   step 3 until the account is full, and then moves to the next account.
+
+## Clan Capital raid (Raid Weekend: Friday 07:00 to Monday 07:00 UTC)
+
+For each ticked account that still has raid attacks:
+
+1. The village is zoomed out and swiped so the Clan Capital airship shows. Its red badge
+   ("5 ⚔") says how many raid attacks are left. Each village's scenery puts the airship somewhere else,
+   so up to five views are looked at, and the one where it was found is remembered for that account.
+   With no badge in any view, the account has no raid attack left (looked at again on the next run). A tap
+   that misses the airship is noticed within 4 s. If the Capital does not open 3 times, the account is
+   skipped for the rest of the weekend.
+2. The airship is tapped. Any popup in the Capital is closed, and the "New Raid" banner of a raid that
+   just began is passed with its Go. The Raid Map button's badge is read again to confirm.
+3. **On the account's first raid attack only**: Change Capital Army. All units are deleted, then as
+   many Super Miners as fit, 1 Frost and 2 Graveyard are added, and the army is saved. If it already
+   is that army, it is left as it is.
+4. **Raid Map**: the map's labels are read: each district's name, its destruction ("100%" =
+   destroyed) and "Locked". Destroyed and locked districts are never tapped. Districts already being
+   attacked (1-99 %) come first, then the others from Barbarian Camp on. The map is read at its top,
+   then swiped down for the districts not seen there. The tapped district's bar must show a **red**
+   Attack (a grey one = destroyed: the bar is closed and the next one is tried). The log shows what
+   the map says ("Raid map (top): Barbarian Camp 100%, ... Builder's Workshop 0%").
+5. **Attack**: zoomed out completely and moved fully down and right, so the camera is always at the
+   same place. Each district's free deploy spot is found once and remembered: the deepest spot of the
+   pale green strip the game lights up along the district's edge (then a wider colour look, then spots
+   around the middle of the screen, one by one). A spot counts only when the Super Miner card turns
+   grey, so a wrong spot is never learned, and a learned spot that stops working is found again.
+   Every later attack on that district taps that spot at once with all the Super Miners (as many taps
+   as the card's "x10"). The spells go into the district, up and left of the miners; if the miners did
+   not go out, no spell is used.
+6. As soon as everything is deployed, Clash of Clans is **closed and opened again with ADB**. The
+   battle goes on without the bot waiting for it, and the next raid attack starts right away.
+
+Learned places are kept in `config/state.json`. **Loot settings > Clan Capital raid > Forget**
+clears them, and they are then found again.
+
+## Loot + upgrade
+
+Each ticked account, in turn: upgrades, then loots until full, then upgrades again with the new loot.
+Upgrading:
+
+1. The **Build** button (bottom right) opens "Buildings & Heroes": the upgrades in progress, then
+   "Suggested upgrades" and "Other upgrades", each with its cost.
+2. The rows are read and matched to **your list** (Loot settings > Loot + upgrade). It has every building
+   of the game. Tick what may be upgraded, and drag it (or Up / Down) into your order. You can also add
+   names the game has that the list does not. **Choose upgrades by**:
+   - **The game's order**: the first row the account can pay, as the game lists it (suggested first),
+     unticked ones skipped;
+   - **My list, top first**: only ticked ones. The whole Build list is read (scrolled to its end), and the
+     highest one in your list that the account can pay is upgraded.
+
+   Only resources you let it spend are used, and 5 lakh gold is always kept for searching. The Town Hall
+   and heroes start unticked: after a Town Hall upgrade, change its level on the Accounts page. Walls are
+   never upgraded.
+3. Its upgrade window opens. The green **Confirm** is tapped only when it shows exactly that cost. The
+   grey "Hammer of Building" (a magic item) is never used.
+4. Again while builders are free. At the end the storages are read again, and the log shows what was
+   really spent.
+
+**Never with gems.** The builders tab ("1/7") also counts the Goblin Builder, who costs gems. So when every
+real builder is busy, the game answers Confirm with "Hey Chief! ... all your Builders are busy" (Goblin
+Builder / Free a Builder, both gems). The bot closes that box with its X and stops upgrading on that
+account. It also reads the time left on the upgrades in progress and does not open the Build panel on
+that account again until the first one is done.
+
+## Loot + walls
+
+Each ticked account first puts what is already above what you keep into walls (room for the loot), loots
+until full, then does it again. What may be spent is set in **Loot settings > Loot + walls**: pay with gold /
+elixir, always keep 5 lakh of each. Walls go cheapest first, with **both** resources:
+
+- gold pays for every wall level; the higher levels also take elixir (two Upgrade buttons, same price);
+- on a level that takes both, the resource that pays for more walls goes first, then the other one pays for the
+  walls left of that level;
+- only elixir to spend: the gold-only levels are skipped and the elixir levels are upgraded; only gold: every
+  level can use it;
+- which levels take which resource is remembered per account, so a visit whose loot pays for no wall does not
+  open the list;
+- since the November 2026 update the higher walls need a **free builder**. When the game answers "Hey Chief!
+  Looks like all your Builders are busy", the box is closed with its X (never the gem button), and walls of that
+  level and up wait until the first upgrade in progress is done. The cheaper levels still go on.
+
+Each batch:
+
+1. The Build panel lists the walls by level, for example "Wall x 25 - 1,000" (25 walls, 1,000 each).
+   The list is read once per visit, about 50 s. The account's cheapest wall is remembered, so a visit
+   that cannot pay even that one does not open the list.
+2. The wall row is tapped: one wall of that level is selected. Then the game's **Upgrade More**.
+3. **Add Wall** (+10, +1) until the walls the budget pays for are selected. The count is read after
+   every tap.
+4. **Upgrade** with the chosen resource. The total on the button must be a whole number of walls, within
+   what may be spent, and match the count in the title.
+5. "Upgrade Walls - ... for 50000 Gold?" -> **Okay** only when the box asks exactly that amount of that
+   resource. Otherwise, or when its Okay does not show, Cancel: the box is never left open. Never gems.
+6. The walls count only when the storage on screen really went down by that amount.
+
+Walls upgrade at once (no builder). The log shows each level done and the storages before and after.
+
+## Loot + donate
+
+Set it up in **Loot settings > Loot + donate**: the main account (#1), the partner (#2), how many accounts
+from the top of the list take part ("Request troops from the top": 30 = the main account and the 29 below
+it; ticks do not matter here), and the elixir one round of donations needs (40 lakh). Then choose
+**Loot + donate** on the Dashboard and press Start. It does not use "Start from account".
+
+1. The main account is opened and its elixir read.
+2. **Enough elixir**: the partner, then the other accounts of the top 30, in turn:
+   army screen (Battle > Edit Army) > the Clan Castle's trash > Okay (empties it) > Request > Send.
+3. The main account is opened again: clan chat > each request's Donate > Balloons for big requests,
+   Archers for the room left, Lightning, a Stone Slammer (exactly what fits when the request's room
+   can be read). Back to 1.
+4. **Not enough elixir**: the main account loots until full, then the partner loots until full, and
+   the requests start again with the partner (step 2).
+
+It goes on until you stop it.
+- The clan's request cooldown is read from the Request button after each request. If a round is
+  shorter than the cooldown, the bot waits on the main account until the partner can request again.
+- An account still on cooldown when its turn comes is passed over for that round, unless its cooldown
+  ends within a minute: then the bot waits for it.
+- If the donate window charges gems, nothing is donated (set the game's "Donation Resource" back to
+  elixir).
+- What is donated is the list `donate.items` in `config/settings.json`.
+
+**When every account is done** (Loot settings > Run; not after Stop): do nothing, close Clash of Clans, close
+BlueStacks, close BlueStacks and the bot, close the game and lock the PC, or shut the PC down.
+
+**Shut the PC down**:
+1. Clash of Clans is closed.
+2. BlueStacks is closed, and the bot waits until its window is gone.
+3. Windows is told to shut down 1 minute later.
+4. The bot closes itself.
+
+To keep the PC on during that minute: Win+R, then `shutdown /a`.
+
+**Loot settings > Device > Now**: **Restart the game** (closes Clash of Clans and opens it again, back to the
+village; BlueStacks is started if it is closed) and **Close BlueStacks**.
+
+**Problems handled on the way:**
+
+- **Stuck**: a watchdog looks at what the bot is doing. One step that makes no progress for 4 minutes
+  (not a wait, not paused) is logged as a warning with a screenshot (`logs/errors/...-stuck.png`).
+  The bot is then made to recover: back to the village, and the game is restarted when that does not
+  help. So a stuck screen never ends a long run.
+- **Big reward chests**: every Continue counts as progress, so a chest with many rewards is opened to its
+  end instead of being taken for a stuck game.
+- **Reward screens** (since the November 2026 update, e.g. "Clan Castle Slice - Item delivered to the
+  Temporary Storage"): **Skip**, then **Yes** in "Skip Chest opening? You'll receive the Reward". The
+  rewards are kept.
+- **Items Delivered** (a white box after a store gift or purchase): **OKAY**.
+
+- **Dialogs**: any dark dialog of the game or of Android is read and answered:
+  - Connection lost / network failed: **Try Again**, once the internet is back.
+  - Another device opened the account: **Reload** - at once, or after the minutes set in **Loot settings > Run >
+    Another device plays this account**, so you can play on your phone meanwhile.
+  - Idle too long: **Reload Game**.
+  - "Rate Clash of Clans": **Never**.
+  - Otherwise: Later, Cancel or Okay. It never presses Review, Exit or Update, and on "Confirm Exit"
+    only Cancel.
+- **Game closed or crashed**: started again with ADB.
+- **Stuck**: an unknown screen, or a dialog with no button it may press, for 60 s: the game is
+  restarted with ADB.
+- **Maintenance**: it waits for the time the maintenance break shows.
+- **Live replay**: if someone is attacking the village, it waits until the attack is over.
+- **Builder Base**: if an account opens there, it sails back home.
+- **Big windows** (army screen, battle results): BlueStacks draws them smaller than the PC pictures,
+  so the bot also looks for the pictures at those sizes.
+
+Every problem saves a screenshot in `logs/errors/`. Everything is logged in `logs/bot.log`.
+
+## settings.json
+
+| Key | Meaning |
 |---|---|
-| **Loot all accounts** | Switches through the enabled accounts (roles ticked on the Loot page) and loots each until its watched storages are full. |
-| **Loot current account only** | Loots the open account. With "When full: Wait for me" you spend the resources, press Continue (F8) and it loots again. |
-| **Loot + Donate cycle** | Like XpIncrease, always starting on Main: not enough elixir for a whole round ("Main keeps at least" + what the last round cost) → Main and the Looter accounts loot until full. Enough → Main first donates to requests that are still open, then every Looter / "Loot + request" / Feeder account empties its Clan Castle and requests → Main donates → repeat while the elixir covers another round → loot again. |
-| **Donate only** | The same without looting: stops when Main's elixir is too low for a round. |
-| **Loot + Upgrade** | Accounts #1-#15 of the Accounts page (Buggu01 … Buggu7; set on the Upgrades page) loot until full; on the ones ticked "Upgrade" (all but the Main and Omi ji) the upgrade plan runs before looting (if there are resources) and after looting. |
-| **Builder Base upgrades** | The same accounts' Builder Base: attacks as set on the Builder Base page, and the Builder Base plan before and after - new buildings first, then your list (default Cannon, Archer Tower, Mortar), then the Builder Hall when the list is maxed (gear up). |
-| **Builder Base only** | Sails to each account's Builder Base (night village), attacks until the daily Star Bonus is complete (or keeps going), collects, upgrades (Builder Hall → new buildings → Cannon / Archer Tower / Mortar), Star Lab research, sails back. Accounts without a Builder Base are skipped. |
-
-"Loot the Builder Base after the home village is full" (Builder Base page) makes every loot mode do the
-night village too, right after each account's home village.
-
-**Upgrade plan** (Upgrades page; only in the two upgrade modes): storages → army camp → barracks / dark
-barracks / spell factories (new troops and spells) → blacksmith → hero hall → laboratory, pet house → archer
-tower, cannon → the buildings you add ("Also upgrade") → Town Hall (only when nothing above can be upgraded any
-more; from Town Hall 16 its weapon gets all 5 stars first). Prices are read from the game every time (sales and
-price changes are fine) and gems are never spent. Builder Base attacks are ended after 60 seconds. When the bot
-starts the game it closes the Google Play Games store window that opens with it.
-
-**BlueStacks** (Device page → BlueStacks, the default): Clash of Clans installed in BlueStacks 5, its ADB switched on
-(BlueStacks Settings > Advanced > Android Debug Bridge) and its screen set to 1920×1080 (Settings > Display).
-BlueStacks always runs **full screen** and in front (the bot presses its F11 when it is not): like the old
-completeid / XpIncrease scripts, the bot takes pictures of the screen itself, finds the images on them and clicks
-those screen pixels with the mouse - clicks and drags - so the PC's mouse is busy during a run. It zooms out with
-the Down arrow, BlueStacks' own zoom key for Clash of Clans (its game controls; keep it there): the mouse wheel only
-zooms halfway, and the airship and the deploy spots are then off screen. ADB is only used to start and stop Clash of Clans. BlueStacks is started when it is
-not running (also when it was closed during a run); the instance is read from BlueStacks' own settings.
-
-**Android emulator** (Device page → Android): set the emulator to 1920×1080 and switch on its ADB. Only adb
-is used (screenshots + taps), nothing is mirrored or recorded and the PC stays free. The running emulator is
-picked automatically.
-
-Account roles: **Main** (loots, donates) · **Looter** (loots in every mode, also in the cycle, and requests) · **Loot + request** (loots in "Loot all", only requests in donation modes) · **Feeder** (only requests) · **Skip**.
-
-Accounts are switched the way the old completeid/XpIncrease scripts did it: one 0.5 s drag moves the Supercell ID
-list exactly 4 accounts, so the bot drags straight to the account's page (keep the Accounts page in the game's
-list order), reads the names there and taps. If the game shows **Try Again** (connection lost) the bot waits for
-the internet and taps it; **Reload** (another device opened the account) or **Reload Game** (idle) are tapped and
-the bot checks it is still on the same account, else opens it again.
-
-## When is an account full?
-
-The bot measures each account's real storage size from the resource bar (amount ÷ how full the bar is,
-within about 1 %), so "full" means *that account's* storages minus a margin (Loot page, default 5 lakh:
-a 3 crore storage is looted until 2.95 crore). Accounts whose storages are smaller than their Town Hall
-suggests are handled, and if storages stop growing for a few attacks the account counts as full anyway.
-The same applies to the Builder Base.
-
-## Army
-
-"Army recipe to use before looting" (Loot page) switches every account to a Saved Recipe by name
-(e.g. your E-Dragon + Clone recipe called "loot") before it attacks. The "E-Dragons + Clone" plan reads
-the key on each troop card, so it works with whatever the account has.
-
-## Village chores (Village page)
-
-- **Collect**: one tap per full collector type (gold, elixir, dark) plus the loot cart, when arriving on an account.
-- **Upgrade buildings**: reads the builder menu (the "1/5" counter), takes the game's suggested upgrades first, skips
-  your "Never upgrade" list (heroes and walls by default) and never goes below your reserve.
-- **Research**: same for the laboratory.
-- Prices are read from the Confirm button (also discounted green prices); only the button with a resource price is
-  pressed. Boost, Finish Now and Hammer/Book confirms are never touched; "buy with gems" offers are closed.
-
-## Raid Weekend (Clan Capital)
-
-Friday 12:30 to Monday 12:30 (India time), the **Raid Weekend** option does each account's raid attacks:
-zoom out, the airship by the river → Clan Capital (the red "5 ⚔" over Raid Map = attacks left) → Change Capital
-Army (once per account and run; nothing to do when it already is Super Miners, 1 Frost, 2 Graveyard): delete it,
-Super Miners only, 1 Frost, 2 Graveyard, Save → Raid Map → the districts from the top down, each until it is
-destroyed (Builder's Workshop, Golem Quarry, Goblin Mines and Skeleton Park after swiping the map up; Capital Peak
-last) → zoom out → everything on the spot of the lit deploy zone nearest the district (the game lights up where
-troops can go: the district's edges and its destroyed parts, different on every district; the next spot when a card
-is not used up there) → the game is closed and opened again with ADB (no waiting for the battle to end) → the airship
-again for the next attack. No lit zone seen: the old fixed spot of Barbarian Camp, and a screenshot in `logs/errors/`.
-Set up and checked on BlueStacks at 1920×1080.
-
-## Smart donations (Donate page)
-
-The bot reads every request card: who asked, the message, and the free space for troops / spells / siege
-(e.g. 34/50). Items whose name or keywords appear in the message ("loons please" → Balloon) go first, then your
-priority list, and it stops exactly when the space is used (each item has a housing space). Optionally it only
-donates to your own accounts.
-
-## Pages
-
-Dashboard (mode, options, Start / Pause F9 / Continue F8 / Stop F10, live stats and log) ·
-Accounts · Loot · Donate · Village · Device · Templates · Logs.
-Emergency stop: F10, or push the mouse into a screen corner.
-
-## How it works
-
-- **Any window size**: the picture is scaled to a 1080-high "game space" and buttons are
-  pinned to the screen edge they belong to; in windowed mode the Google Play Games
-  title bar and sidebar are detected and cut off.
-- **Reading numbers**: digit images of the game font (about 8 ms, exact) — no OCR.
-  Account names: RapidOCR, matched strictly on the numbers (Buggu1 ≠ Buggu01).
-- **Smart deployment**: finds the scouted base and drops troops on a ring just
-  outside it, reads each troop's count, checks that every tap really deployed a unit,
-  moves spots that land in the red area and stops when a card is empty.
-- **Recovery**: knows the home, army, search, battle, results, reward chest, daily
-  reward, character dialogs, chat, donate window, settings, account list and the
-  "Anyone there?" popup, and gets back to the village from any of them. Every problem
-  saves a screenshot in `logs/errors/`.
-- **Never spends gems**: the request button on cooldown (gem price) is detected and skipped.
+| `device.bluestacks_instance` | `""` = the main BlueStacks instance; clones are `Pie64_1` ... |
+| `device.adb_path` | `""` = adb on PATH, else BlueStacks' own HD-Adb.exe |
+| `mode` | `"loot"`, `"raid"` (Clan Capital raids), `"raid_loot"` (raids, then loot), `"loot_upgrade"`, `"loot_walls"` or `"loot_donate"` |
+| `start_from` | account # the run starts with; it follows the run (where it stopped) |
+| `repeat_rounds` | rounds over all accounts, `0` = forever |
+| `when_done` | once every account is done (not after Stop): `"nothing"`, `"close_game"`, `"close_bluestacks"`, `"close_all"` (BlueStacks and the bot), `"lock"` (close the game, lock the PC) or `"shutdown"` (close the game and BlueStacks, shut the PC down 1 minute later, the bot closes itself; to keep the PC on: `shutdown /a`) |
+| `another_device_wait` | minutes to wait before Reload when another device plays the account (`0` = at once) |
+| `loot.watch` | which resources decide "full" (elixir by default) |
+| `loot.full_rule` | `"any"` / `"all"` watched resources full |
+| `loot.min_loot_rule` | attack when `"any"` / `"all"` watched resources reach the minimum |
+| `loot.max_searches` | Next presses before giving up the search |
+| `loot.max_attacks_per_account` | `0` = no limit |
+| `loot.battle_seconds` | the battle is ended after this many seconds at the latest |
+| `loot.end_when_loot_stops` | end it sooner when no loot came in for this many seconds (`0` = off) |
+| `loot.smart_deploy` | deploy on a ring just outside the base (else the plan's fixed points) |
+| `loot.count_troops` | read each card's count and check every tap |
+| `loot.attack_plan` | a plan in `attack_plans.json` (`edrag_clone`, `edrag_spread`) |
+| `loot.stuck_attacks` | storages not growing after this many attacks = full |
+| `raid.attacks` | raid attacks per account per Raid Weekend (`6`) |
+| `walls.spend` / `walls.keep` | Loot + walls: resources walls may be paid with (gold, elixir) and what is never spent (`500000` each) |
+| `upgrade.spend` | resources upgrades may be paid with (`gold`, `elixir`, `dark`: all on) |
+| `upgrade.keep` | never spent (`gold: 500000`: searching costs gold) |
+| `upgrade.order` | `"game"` (the game's order, unticked ones skipped) or `"mine"` (only ticked, top of the list first) |
+| `upgrade.list` | `[{"name", "on"}]` in your order; buildings it does not name are added at its end (ticked; Town Hall and heroes unticked) |
+| `donate.main` / `donate.partner` | account # of the main account (`1`, donates) and its partner (`2`, `0` = none) |
+| `donate.request_top` | the top this many accounts take part (`30` = the main account and 29 requesters) |
+| `donate.need` | elixir the main account needs for a round (`4000000` = 40 lakh); below it, it loots |
+| `donate.empty_cc` | empty the Clan Castle before requesting (`true`) |
+| `donate.only_mine` | donate only to requests from your own accounts (`false` = every request) |
+| `donate.items` | what is donated, in order: picture, housing space, taps, `use` big / small / all requests |
+| `full_at` | full storage per Town Hall: `{"18": {"gold": ..., "elixir": ..., "dark": ...}}` |
+| `min_loot` | loot a base must have, per Town Hall (`"default"` for the others) |
 
 ## Files
 
-- `bot/core/` — devices (PC window / ADB + scrcpy pinch), game space, image matching, digits, OCR, stop/pause.
-- `bot/states.py` — screen detection and "go home".
-- `bot/actions/` — account switching, looting, attack + deploy zone, clan castle / donating (`troops.py`: housing
-  space and keywords), village chores (`village.py`).
-- `bot/modes/` — one file per mode; `@register(...)` adds it to the dashboard.
-- `gui/` — the window (PySide6).
-- `config/` — settings.json, accounts.json, attack_plans.json.
-- `assets/profiles/<profile>/` — templates (`name.png`, extra looks `name~2.png`), digits, click points.
-
-When Supercell changes a button, re-capture it on the Templates page; no code changes needed.
+- `bot/device.py`: BlueStacks: starts and stops the game with ADB, takes screenshots, and moves the
+  mouse and keys.
+- `bot/space.py`, `bot/layout.py`: map any screen resolution onto the 1920×1080 pictures and points.
+- `bot/vision.py`: finds images on the screen, reads the game's digits, and reads text (account names).
+- `bot/states.py`: detects which screen the game is on and gets back to the village.
+- `bot/account.py`: switches accounts.
+- `bot/army.py`: the army screen, and the first saved recipe before looting.
+- `bot/loot.py`: decides when an account is full, searches for a base, attacks, and loots until full.
+- `bot/attack.py`, `bot/deployzone.py`: deploy troops and end the battle.
+- `bot/raid.py`: Clan Capital raids: the airship, the capital army, the districts, deploying, restarting.
+- `bot/walls.py`: Loot + walls: the wall rows of the Build panel, Upgrade More, Add Wall, the checked Okay.
+- `bot/upgrade.py`: Loot + upgrade: the Build panel, choosing an upgrade it can pay, the safe Confirm.
+- `bot/donate.py`: Loot + donate: emptying the Clan Castle, requesting, donating from the clan chat,
+  and the loot / request / donate cycle.
+- `bot/runner.py`: the all-accounts loop (loot / raid / both) and recovering from errors.
+- `window.py`, `motion.py`, `icons.py`: the window (PySide6), its animations and its icons (the same
+  set as Coc-Bot's).
+- `assets/templates/`, `assets/digits/`: the pictures, copied from Coc-Bot (1920×1080), including the
+  Clan Capital ones in `assets/templates/raid/` and the clan ones (chat, request, donate window).

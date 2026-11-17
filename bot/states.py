@@ -7,10 +7,10 @@ import time
 import cv2
 import numpy as np
 
-from .core import net, vision
-from .core.context import BotError
-from .core.control import control
-from .core.space import space
+from . import net, vision
+from .context import BotError
+from .control import control
+from .space import space
 
 log = logging.getLogger("bot")
 
@@ -19,18 +19,15 @@ log = logging.getLogger("bot")
 # other overlay dims the village buttons, so they cannot match under it), then the rest.
 STATES = [
     ("exit_dialog", ["popup/exit_title"]),        # "Confirm Exit - quit the game?": ALWAYS Cancel, never Okay
-    ("wall_dialog", ["wall/dialog_title"]),       # "Upgrade Walls ... for 40000 Gold?" left open: Cancel (only
-    #                                               the wall upgrade itself presses its Okay, after checking it)
+    ("wall_dialog", ["wall/dialog_title"]),       # "Upgrade Walls ... for 40000 Gold?" left open: Cancel
     ("maintenance", ["popup/maintenance"]),       # "Maintenance break" (news page): wait its estimated time
     ("live_replay", ["battle/live_replay"]),      # someone attacks this village right now: wait until it ends
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
     ("reload", ["popup/try_again", "popup/reload_device", "popup/reload", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
     ("chat", ["chat/close"]),                     # clan chat open over the village
-    ("bb_army", ["bb/army_title"]),               # Builder Base "Choose Army": close with its X
     ("bb_home", ["bb/trophy_hammer"]),            # Builder Base village (night): before "home"
     # the Build button (not in battles) and the dark elixir drop (not in the Builder Base), both undimmed
-    # (the button under the profile picture is a trophy or a league badge, depending on the account)
     ("home", ["home/build_button", "home/dark_drop"]),
     ("daily", ["popup/daily_title"]),
     ("reward_popup", ["popup/hoggy_title"]),        # Hoggy Bank rewards etc.: Continue
@@ -45,143 +42,152 @@ STATES = [
     ("remove_dialog", ["army/remove_title"]),      # "Remove troops?" -> Cancel when lost
     ("request_window", ["request/title"]),         # request window -> Cancel when lost
     ("results", ["results/claim_reward", "results/return_home"]),
-    ("chest", ["chest/continue", "chest/room", "chest/pedestal", "chest/tap_text"]),
+    ("chest", ["chest/skip_title", "chest/skip", "chest/continue", "chest/room", "chest/pedestal",
+               "chest/tap_text"]),
     ("confirm", ["battle/confirm_okay"]),
     ("scout", ["scout/next"]),              # "Available Loot" stays visible in battle, Next does not
     ("battle", ["battle/surrender"]),
-    ("loading", ["load/loading"]),
 ]
 
 CLOSE_BUTTONS = ["settings/close", "army/close", "sid/close", "build/close"]   # build: the Build side panel
 # Buttons worth tapping wherever they appear when the screen is not recognised.
-ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/continue", "popup/continue_green",
+ANYWHERE_BUTTONS = ["results/return_home", "results/claim_reward", "chest/skip", "chest/continue",
+                    "popup/continue_green",
+                    "popup/okay_blue",          # the white "Items Delivered" box (a store gift / purchase)
                     "battle/confirm_okay",
-                    "popup/try_again", "popup/reload_device", "popup/reload", "popup/okay", "popup/daily_claim",
+                    "popup/try_again", "popup/reload_device", "popup/reload", "popup/daily_claim",
                     "popup/close_x"]
 
 
-# The game's own dialogs (dark box, light-blue capital buttons): connection lost -> TRY AGAIN,
-# another device opened this account -> RELOAD, idle too long -> RELOAD GAME.
+# Dark system dialogs - the game's own and Android's (a flat dark-grey box with capital-letter buttons):
+#   connection lost / network failed -> TRY AGAIN, another device opened this account -> RELOAD,
+#   idle too long ("Anyone there?") -> RELOAD GAME, Google Play's "Rate Clash of Clans" -> NEVER ...
 RELOAD_KEYS = ["popup/try_again", "popup/reload", "popup/reload_device"]   # RELOAD GAME before its prefix RELOAD
-SYSTEM_TEXT = [("try again", "popup/try_again"), ("reload game", "popup/reload"), ("reload", "popup/reload_device")]
-SYSTEM_REGION = (160, 120, 1600, 840)
-DIALOG_BGR = (30, 28, 25)          # the flat dark grey of those dialogs
 RELOAD_LOG = {"popup/try_again": "Connection lost: tapping Try Again",
               "popup/reload_device": "Another device opened this account: opening it here again",
               "popup/reload": "The game asks to reload (idle too long): Reload Game"}
+# the buttons the bot presses on such a dialog, best first (read with the text reader). Never "Review",
+# "Exit", "Update", "Buy" ... and on "Confirm Exit" only Cancel.
+DIALOG_BUTTONS = [("reloadgame", "reload"), ("reload", "reload"), ("tryagain", "try_again"), ("retry", "try_again"),
+                  ("never", "close"), ("later", "close"), ("notnow", "close"), ("nothanks", "close"),
+                  ("cancel", "close"), ("close", "close"), ("closeapp", "close"), ("okay", "close"), ("ok", "close")]
+SYSTEM_REGION = (160, 120, 1600, 840)
 
 
 def dialog_box(frame):
-    """The game's system dialog (a large flat dark-grey box: (30, 28, 25) on the PC, (64, 57, 54) on
-    Android), if one is on screen: (x, y, w, h) or None. Cheap, so the (slow) text reading only
-    runs when there really is such a dialog."""
-    x, y, w, h = space.region(*SYSTEM_REGION)
+    """A system dialog (a flat dark-grey box in the middle of the screen: (30, 28, 25) in the PC game,
+    (64, 57, 54) or (66, 66, 66) on Android), if one is on screen: (x, y, w, h) or None. Cheap, so the
+    (slow) text reading only runs when there really is such a dialog."""
+    H, W = frame.shape[:2]
     step = 4                                         # every 4th pixel is plenty for a box this big
-    roi = frame[y:y + h:step, x:x + w:step].astype(np.int16)
-    q = roi // 8
-    packed = (q[:, :, 0] * 1024 + q[:, :, 1] * 32 + q[:, :, 2]).ravel()
-    counts = np.bincount(packed, minlength=32768)
+    mid = frame[int(H * 0.42):int(H * 0.58):step, int(W * 0.38):int(W * 0.62):step].astype(np.int16)
+    q = mid // 8
+    counts = np.bincount((q[:, :, 0] * 1024 + q[:, :, 1] * 32 + q[:, :, 2]).ravel(), minlength=32768)
     top = int(counts.argmax())
-    if counts[top] < packed.size * 0.1:
-        return None
+    if counts[top] < counts.sum() * 0.25:
+        return None                                  # the middle of the screen is not one flat colour
     colour = np.array([top // 1024, (top // 32) % 32, top % 32]) * 8 + 4
     if colour.min() < 14 or colour.max() > 100 or colour.max() - colour.min() > 24:
         return None                                  # not a dark neutral grey (black = loading screen)
-    mask = np.abs(roi - colour).max(axis=2) <= 7
-    if mask.sum() < 30000 // step ** 2:
+    x, y, w, h = space.region(*SYSTEM_REGION)
+    roi = frame[y:y + h:step, x:x + w:step].astype(np.int16)
+    mask = (np.abs(roi - colour).max(axis=2) <= 7).astype(np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))     # fill the text
+    n, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=4)
+    cx, cy = (W // 2 - x) // step, (H // 2 - y) // step
+    best = None
+    for i in range(1, n):
+        l, t, bw, bh, area = stats[i]
+        if l <= cx <= l + bw and t <= cy <= t + bh and (best is None or area > best[4]):
+            best = stats[i]
+    if best is None:
         return None
-    rows = np.where(mask.sum(axis=1) > 200 // step)[0]
-    cols = np.where(mask.sum(axis=0) > 60 // step)[0]
-    if len(rows) < 60 // step or len(cols) < 200 // step:
-        return None
-    x0, y0 = x + int(cols.min()) * step, y + int(rows.min()) * step
-    box = (x0, y0, int(cols.max() - cols.min() + 1) * step, int(rows.max() - rows.min() + 1) * step)
-    H, W = frame.shape[:2]
+    l, t, bw, bh, area = (int(v) for v in best)
+    box = (x + l * step, y + t * step, bw * step, bh * step)
     bx, by, bw, bh = box
     if not (abs(bx + bw / 2 - W / 2) < W * 0.12 and abs(by + bh / 2 - H / 2) < H * 0.2
-            and 0.3 * W <= bw <= 0.72 * W and 0.15 * H <= bh <= 0.6 * H):
+            and 0.25 * W <= bw <= 0.75 * W and 0.12 * H <= bh <= 0.6 * H and area * step * step > 0.6 * bw * bh):
         return None                                  # not centred / not dialog-sized (e.g. clan chat)
-    global _dialog_colour
-    _dialog_colour = tuple(int(c) for c in colour)
     return box
 
 
-_dialog_colour = DIALOG_BGR
+_last_dialog_log = {}
 
 
-def _button_boxes(frame, box):
-    """Text groups in the bottom row of the dialog = its buttons (light-blue capitals)."""
-    x, y, w, h = box
-    x0, y0 = x + 20, y + int(h * 0.55)                 # the buttons are in the lower part
-    strip = frame[y0:y + h - 12, x0:x + w - 20].astype(np.int16)
-    ink = np.abs(strip - np.array(_dialog_colour)).max(axis=2) > 60
-    if ink.size:
-        ink[ink.mean(axis=1) > 0.5, :] = False       # an outlined button (Android): drop its frame lines
-        ink[:, ink.mean(axis=0) > 0.5] = False
-    cols = np.where(ink.any(axis=0))[0]
-    out = []
-    if len(cols) == 0:
-        return out
-    start = prev = cols[0]
-    for c in list(cols[1:]) + [None]:
-        if c is None or c - prev > 30:                 # a wide gap separates two buttons
-            rows = np.where(ink[:, start:prev + 1].any(axis=1))[0]
-            out.append((x0 + int(start) - 6, y0 + int(rows.min()) - 6, int(prev - start) + 13,
-                        int(rows.max() - rows.min()) + 13))
-            start = c
-        prev = c if c is not None else prev
-    return out
-
-
-def system_button(frame):
-    """Read the game's Try Again / Reload buttons on its dark system dialog (for when there is no
-    template for them yet). Returns (template key, (x, y, w, h)) or (None, None)."""
-    box = dialog_box(frame)
-    if box is None:
-        return None, None
-    for b in _button_boxes(frame, box):
-        text, conf = vision.text_reader.read_line(frame, b)
-        words = re.sub(r"[^a-z]", "", text.lower())
-        for button, key in SYSTEM_TEXT:
-            if conf > 0.6 and words == button.replace(" ", ""):
-                return key, b
-    return None, None
-
-
-_last_reload_log = {}
-
-
-def press_reload(bot, frame, key=None, box=None):
-    """Tap the game's Try Again / Reload button. Offline: wait for the internet first, so the bot
-    keeps trying instead of restarting the game again and again. Returns True if tapped."""
-    m = None
-    if key is None or box is None:
-        for k in ([key] if key else RELOAD_KEYS):
-            m = vision.templates.has(k) and vision.find(frame, k)
-            if m:
-                key = k
-                break
-    if key is None or (m is None and box is None):
-        return False
+def _log_once(key, msg, *args, level=logging.WARNING):
     now = time.monotonic()
-    if now - _last_reload_log.get(key, 0) > 60:
-        _last_reload_log[key] = now
-        log.warning(RELOAD_LOG[key])
-    if key == "popup/try_again":
-        net.wait_until_online(bot)
-    if m:
-        bot.tap_match(m)
-    else:
-        x, y, w, h = box
-        if not vision.templates.has(key):              # remember the button: next time it is found at once
-            pad = 6
-            vision.templates.save(key, frame, (max(0, x - pad), max(0, y - pad), w + 2 * pad, h + 2 * pad),
-                                  threshold=0.8, pad=120)
-            log.info("Saved the game's '%s' button as template %s", key.split("/")[-1].replace("_", " "), key)
-        bot.tap(x + w // 2, y + h // 2, jitter=2)
+    if now - _last_dialog_log.get(key, 0) > 60:
+        _last_dialog_log[key] = now
+        log.log(level, msg, *args)
+
+
+def another_device(bot):
+    """Someone opened this account on another device (your phone): wait the minutes the settings say before Reload,
+    so you can keep playing there (0 = Reload at once)."""
+    minutes = float(bot.settings.get("another_device_wait", 0) or 0)
+    if minutes <= 0:
+        return
+    log.info("Another device is playing on %s: waiting %g min before Reload", bot.current_account or "this account",
+             minutes)
+    end = time.monotonic() + minutes * 60
+    while time.monotonic() < end:
+        left = int(end - time.monotonic())
+        bot.action = f"Waiting: another device is playing ({left // 60}m {left % 60:02d}s before Reload)"
+        control.sleep(min(5, max(0.1, end - time.monotonic())))
+    log.info("Reloading after waiting for the other device")
+
+
+def _reloading(bot, kind):
+    """Before / after a Try Again or Reload: offline -> wait for the internet first (so the bot keeps
+    trying instead of restarting the game again and again); then remember to check the account."""
+    if kind == "try_again":
+        net.wait_until_online()
     bot.reloaded = True
     bot.reload_at = time.monotonic()
-    return True
+
+
+def press_reload(bot, frame):
+    """Tap the game's Try Again / Reload button where its picture is. Returns True if tapped."""
+    for k in RELOAD_KEYS:
+        m = vision.templates.has(k) and vision.find(frame, k)
+        if m:
+            _log_once(k, RELOAD_LOG[k])
+            if k == "popup/reload_device":
+                another_device(bot)
+            _reloading(bot, "try_again" if k == "popup/try_again" else "reload")
+            bot.tap_match(m)
+            return True
+    return False
+
+
+def system_dialog(bot, frame, box=None):
+    """A dark system dialog (the game's or Android's): read its text and press the best button (Reload,
+    Try Again, Never / Later / Cancel / Okay ...). Returns what was pressed ("reload", "try_again",
+    "close") or None when there is no such dialog or no button the bot may press."""
+    box = box or dialog_box(frame)
+    if box is None:
+        return None
+    x, y, w, h = box
+    lines = [(t, c, b) for t, c, b in vision.text_reader.read(frame, box) if c > 0.6]
+    words = lambda t: re.sub(r"[^a-z]", "", t.lower())          # noqa: E731
+    title = " ".join(t for t, _, b in lines if b[1] < y + h * 0.45)
+    buttons = [(words(t), t, b) for t, _, b in lines if b[1] >= y + h * 0.45]
+    allowed = DIALOG_BUTTONS
+    if re.search(r"exit|quit", " ".join(t for t, _, _ in lines).lower()):
+        allowed = [("cancel", "close")]                           # "Confirm Exit": never Okay
+    for word, kind in allowed:
+        for text, label, (bx, by, bw, bh) in buttons:
+            if text == word:
+                _log_once("dialog:" + title + word, "Dialog '%s': pressing %s", title or "?", label.strip())
+                if kind == "reload" and "anotherdevice" in words(title):
+                    another_device(bot)
+                if kind != "close":
+                    _reloading(bot, kind)
+                bot.tap(bx + bw // 2, by + bh // 2, jitter=2)
+                return kind
+    _log_once("dialog:" + title, "Dialog '%s' has no button the bot may press (%s)", title or "?",
+              ", ".join(label for _, label, _ in buttons) or "none read")
+    return None
 
 
 def after_reload(bot):
@@ -191,7 +197,7 @@ def after_reload(bot):
     acc = getattr(bot, "current_acc", None)
     if not acc or getattr(bot, "_reopening", False):
         return
-    from .actions import account
+    from . import account
     if account.on_account(bot, acc, check_name=True):
         log.info("Back on %s after the reload", acc["name"])
         return
@@ -199,7 +205,7 @@ def after_reload(bot):
     bot._reopening = True
     try:
         bot.current_account = None
-        account.switch_to(bot, acc, getattr(bot, "state", None))
+        account.switch_to(bot, acc)
     finally:
         bot._reopening = False
 
@@ -247,9 +253,6 @@ def cancel_placement(bot, frame=None):
     return False
 
 
-ALL_KEYS = {"home"}       # states that need all their pictures to match
-
-
 def detect(frame):
     for name, keys in STATES:
         if name == "reload" and dialog_box(frame) is not None:
@@ -261,10 +264,6 @@ def detect(frame):
             if vision.find(frame, "home/build_button") and (
                     vision.find(frame, "home/dark_drop")
                     or (vision.templates.has("home/gem_plus") and vision.find(frame, "home/gem_plus"))):
-                return name
-            continue
-        if name in ALL_KEYS:
-            if have and all(vision.find(frame, k) for k in have):
                 return name
             continue
         for k in have:
@@ -325,20 +324,17 @@ def _close_any_popup(bot, frame):
             m = vision.find(frame, k, region=full)
             if m:
                 if k in RELOAD_KEYS:
-                    press_reload(bot, frame, k)
-                else:
-                    bot.tap_match(m)
+                    _log_once(k, RELOAD_LOG[k])
+                    _reloading(bot, "try_again" if k == "popup/try_again" else "reload")
+                bot.tap_match(m)
                 return
     for k in CLOSE_BUTTONS:
         if vision.templates.has(k):
-            m = vision.find(frame, k, region=(0, 0, frame.shape[1], frame.shape[0]), threshold=0.8)
+            m = vision.find(frame, k, region=full, threshold=0.8)
             if m:
                 bot.tap_match(m, jitter=2)
                 return
     if cancel_placement(bot, frame):
-        return
-    if bot.device.kind == "adb":
-        bot.key("back")                  # Android: Back closes the window on top - safer than a blind tap
         return
     _tap_empty(bot, frame)
 
@@ -372,18 +368,29 @@ def surrender(bot, frame=None, blind=False):
 
 MAINTENANCE_TIME = (1650, 50, 250, 80)     # "Estimated time 39m" at the top right of the maintenance page
 LIVE_REPLAY_MAX = 300                     # an attack lasts 3 minutes at most (+ its results)
+_UNITS = {"d": 86400, "h": 3600, "m": 60, "s": 1}
+
+
+def parse_time(text):
+    """Seconds in a game time like "2d 4h", "45m 10s", "3h" (None if it is not a time)."""
+    t = re.sub(r"[^0-9a-z|]", "", (text or "").lower())
+    # digits the text reader mistakes for letters: a unit always follows a number, so an "s" that does not
+    # is a 5 ("SH50M" = 5h 50m); "o" is a 0, "l" / "i" / "|" a 1
+    t = re.sub(r"(?<!\d)s", "5", t).translate(str.maketrans("oli|", "0111"))
+    parts = re.findall(r"(\d+)([dhms])", t)
+    if not parts or re.sub(r"\d+[dhms]", "", t):
+        return None
+    return sum(int(n) * _UNITS[u] for n, u in parts)
 
 
 def wait_maintenance(bot, frame):
     """Supercell's maintenance break: nothing can be done until it is over. Wait the time it shows
     (checking every minute), then restart the game."""
-    from .actions.timers import parse_time
     secs = None
     for text, _, _ in vision.text_reader.read(frame, space.region(*MAINTENANCE_TIME)):
         secs = parse_time(text) or secs
     secs = secs or 15 * 60
     log.warning("The game is in a maintenance break (about %d min): waiting, then going on", secs // 60 + 1)
-    bot.status(action=f"Maintenance break - about {secs // 60 + 1} min", waiting=False)
     until = time.monotonic() + secs + 60
     while time.monotonic() < until:
         control.sleep(60)
@@ -392,8 +399,25 @@ def wait_maintenance(bot, frame):
     restart_game(bot)
 
 
+RUNNING_CHECK = 10          # an unknown screen this long: is the game still running? (ADB)
+STUCK_RESTART = 60          # an unknown screen (or a dialog without a known button) this long: restart the game
+CHEST_TAPS = 80             # a chest opening this many rewards is still progress (the time limit grows with it)
+
+
+def _restart_now(bot, why):
+    """Close Clash of Clans with ADB and start it again (inside go_home, which then waits for the village)."""
+    log.warning("%s: restarting Clash of Clans", why)
+    bot.save_error("stuck")
+    bot.device.close_game()
+    control.sleep(3)
+    bot.device.launch_game()
+    control.sleep(5)
+
+
 def go_home(bot, timeout=60.0):
-    """Get back to the home village from wherever the game is. Returns True on success."""
+    """Get back to the home village from wherever the game is. Returns True on success.
+    The game closed or crashed is started again; an unknown screen or a dialog the bot cannot answer
+    for STUCK_RESTART seconds makes it restart the game (once per call)."""
     end = time.monotonic() + timeout
     live_since = None
     unknown = 0
@@ -401,12 +425,32 @@ def go_home(bot, timeout=60.0):
     last = None
     last_ocr = 0.0
     loaded_after = None         # the Reload / Try Again tap after which the game was seen loading
+    stuck_since = None          # since when the screen is unknown / an unanswerable dialog
+    running_checked = 0.0
+    restarted = False
     while time.monotonic() < end:
         frame = bot.shot()
         state = detect(frame)
+        now = time.monotonic()
         if state != last:
             log.debug("screen: %s", state)
             last = state
+            if state not in ("unknown", "reload"):
+                stuck_since = None
+        if state in ("unknown", "reload"):
+            stuck_since = stuck_since or now
+            if now - stuck_since > RUNNING_CHECK and now - running_checked > RUNNING_CHECK:
+                running_checked = now
+                if not bot.device.is_game_running():
+                    log.warning("Clash of Clans is not running (closed or crashed): starting it")
+                    bot.device.launch_game()
+                    stuck_since, end = None, max(end, now + 120)
+                    control.sleep(5)
+                    continue
+            if now - stuck_since > STUCK_RESTART and not restarted:
+                _restart_now(bot, f"Stuck on an unknown screen for {STUCK_RESTART} s")
+                restarted, stuck_since, end = True, None, max(end, time.monotonic() + 120)
+                continue
         if bot.reloaded and state not in ("home", "reload"):
             loaded_after = bot.reload_at            # the game is loading again after that tap
         if state == "home" and tutorial_bubble(frame):
@@ -440,12 +484,15 @@ def go_home(bot, timeout=60.0):
             continue
         if state in ("exit_dialog", "wall_dialog"):
             bot.tap_point("dialog.cancel")           # never quit the game / never pay for walls by accident
-        elif state == "switcher":
-            bot.tap_point("sid.close", jitter=2)
-        elif state == "settings":
-            bot.tap_point("settings.close", jitter=2)
-        elif state == "army":
-            bot.tap_point("army.close", jitter=2)
+        elif state in ("switcher", "settings", "army"):
+            # its X where its picture is (BlueStacks draws these windows elsewhere than the PC), else the PC's point
+            key = {"switcher": "sid/close", "settings": "settings/close", "army": "army/close"}[state]
+            m = vision.templates.has(key) and vision.find(frame, key)
+            if m:
+                bot.tap_match(m, jitter=2)
+            else:
+                bot.tap_point({"switcher": "sid.close", "settings": "settings.close", "army": "army.close"}[state],
+                              jitter=2)
         elif state == "attack_menu":
             bot.tap_point("attack_menu.close")
         elif state == "scout":
@@ -461,9 +508,31 @@ def go_home(bot, timeout=60.0):
                     bot.tap_match(m)
                     break
         elif state == "chest":
+            if chest_taps < CHEST_TAPS:
+                end = max(end, now + 15)              # a big chest gives its rewards one by one: progress, not stuck
+            # Skip (the new reward screens, e.g. "Clan Castle Slice"): every reward at once - the game asks "Skip
+            # Chest opening? You'll receive the Reward" -> Yes; else Continue
+            m = vision.templates.has("chest/skip_title") and vision.find(frame, "chest/skip_title")
+            if m:
+                yes = vision.find(frame, "chest/skip_yes")
+                if yes:
+                    bot.tap_match(yes, jitter=2)
+                    log.info("Reward screen: skipped (the rewards are kept)")
+                    control.sleep(1.2)
+                    continue
+            m = vision.templates.has("chest/skip") and vision.find(frame, "chest/skip")
+            if m:
+                bot.tap_match(m, jitter=2)
+                chest_taps += 1
+                log.info("Reward screen: Skip")
+                control.sleep(1.0)
+                continue
             m = vision.templates.has("chest/continue") and vision.find(frame, "chest/continue")
             if m:
                 bot.tap_match(m)
+                chest_taps += 1
+                log.debug("Chest: Continue (reward %d)", chest_taps)
+                control.sleep(0.8)
             else:
                 # each tap breaks one lock; taps during the shake animation are ignored, so wait
                 # between taps and rotate between the chest, above it and the side of the room
@@ -489,8 +558,6 @@ def go_home(bot, timeout=60.0):
             bot.tap_point("dialog.cancel")
         elif state == "request_window":
             bot.tap_point("request.cancel")
-        elif state == "bb_army":
-            bot.tap_point("bb.army_close")
         elif state == "shop":
             m = vision.find(frame, "shop/close") if vision.templates.has("shop/close") else None
             bot.tap_match(m, jitter=1) if m else bot.tap_point("shop.close", jitter=0)
@@ -502,9 +569,9 @@ def go_home(bot, timeout=60.0):
             bot.tap_match(m) if m else bot.tap_point("popup.shield_continue")
         elif state == "bb_home":
             # in the Builder Base but the home village is wanted: sail back
-            from .actions import builder_base
+            from . import village
             try:
-                builder_base.travel(bot, "main")
+                village.travel_home(bot)
             except Exception as e:  # noqa: BLE001
                 log.warning("Could not sail back from the Builder Base: %s", e)
         elif state == "daily":
@@ -520,18 +587,14 @@ def go_home(bot, timeout=60.0):
             control.sleep(0.4)
             continue
         elif state == "reload":
-            tapped = press_reload(bot, frame)
+            tapped = press_reload(bot, frame)                      # Try Again / Reload by their pictures
             if not tapped and time.monotonic() - last_ocr > 2.5:
                 last_ocr = time.monotonic()
-                key, box = system_button(frame)                    # no template for this button yet
-                tapped = bool(key) and press_reload(bot, frame, key, box)
-                if not tapped:
-                    if bot.device.kind == "adb":
-                        bot.key("back")          # e.g. Android's "exit the game?": dismiss it
-                    else:
-                        log.warning("A game dialog without Try Again / Reload is open; waiting")
+                tapped = system_dialog(bot, frame)                 # else read the dialog's buttons
             if tapped:
-                end = max(end, time.monotonic() + 90)              # never give up while it reconnects
+                if tapped != "close":
+                    end = max(end, time.monotonic() + 90)          # never give up while it reconnects
+                stuck_since = None
                 control.sleep(1.0)
         control.sleep(0.45)
     bot.save_error("not-home")
@@ -539,7 +602,7 @@ def go_home(bot, timeout=60.0):
 
 
 def ensure_game(bot, timeout=150.0):
-    """Start the game if needed and wait for the home village."""
+    """Start the game with ADB if needed and wait for the home village."""
     dev = bot.device
     if not dev.is_game_running():
         log.info("Starting Clash of Clans...")
@@ -549,18 +612,14 @@ def ensure_game(bot, timeout=150.0):
             if time.monotonic() - start > 60:
                 raise BotError("Clash of Clans did not start")
             control.sleep(0.5)
-        for i in range(dev.tidy_rounds):      # Google Play Games' store window can appear a little after the game
-            if i:
-                control.sleep(2)
-            dev.tidy_up()
-    else:
-        dev.tidy_up()
+    dev.tidy_up()
     if not go_home(bot, timeout):
         raise BotError("Could not reach the home village")
     return True
 
 
 def restart_game(bot):
+    """Stop Clash of Clans with ADB and start it again."""
     log.warning("Restarting Clash of Clans")
     bot.device.close_game()
     control.sleep(8)

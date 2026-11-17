@@ -1,0 +1,1982 @@
+{
+  "army/attack_button": {
+    "box": [
+      1470,
+      892,
+      300,
+      56
+    ],
+    "region": [
+      1410,
+      832,
+      420,
+      176
+    ],
+    "threshold": 0.85
+  },
+  "army/clone": {
+    "box": [
+      878,
+      600,
+      80,
+      55
+    ],
+    "region": [
+      840,
+      300,
+      960,
+      420
+    ],
+    "threshold": 0.8
+  },
+  "army/close": {
+    "box": [
+      1735,
+      120,
+      55,
+      55
+    ],
+    "region": [
+      1675,
+      60,
+      175,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "army/edrag": {
+    "box": [
+      875,
+      360,
+      85,
+      60
+    ],
+    "region": [
+      840,
+      300,
+      960,
+      420
+    ],
+    "threshold": 0.8
+  },
+  "army/my_army_title": {
+    "box": [
+      370,
+      138,
+      160,
+      38
+    ],
+    "region": [
+      310,
+      78,
+      280,
+      158
+    ],
+    "threshold": 0.85
+  },
+  "army/recipes_arrow": {
+    "box": [
+      1104,
+      132,
+      74,
+      48
+    ],
+    "region": [
+      1044,
+      72,
+      194,
+      168
+    ],
+    "threshold": 0.85
+  },
+  "army/remove_title": {
+    "box": [
+      755,
+      340,
+      415,
+      55
+    ],
+    "region": [
+      695,
+      280,
+      535,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "army/use_recipe_title": {
+    "box": [
+      740,
+      340,
+      445,
+      52
+    ],
+    "region": [
+      680,
+      280,
+      565,
+      172
+    ],
+    "threshold": 0.85
+  },
+  "attack_menu/edit_army": {
+    "box": [
+      145,
+      1012,
+      148,
+      40
+    ],
+    "region": [
+      40,
+      960,
+      330,
+      120
+    ],
+    "threshold": 0.8
+  },
+  "attack_menu/find_match": {
+    "box": [
+      105,
+      712,
+      335,
+      44
+    ],
+    "region": [
+      45,
+      652,
+      455,
+      164
+    ],
+    "threshold": 0.85
+  },
+  "battle/clone_card": {
+    "box": [
+      1075,
+      950,
+      70,
+      75
+    ],
+    "region": [
+      0,
+      880,
+      1920,
+      200
+    ],
+    "threshold": 0.8
+  },
+  "battle/confirm_okay": {
+    "box": [
+      995,
+      615,
+      280,
+      108
+    ],
+    "region": [
+      935,
+      555,
+      400,
+      228
+    ],
+    "threshold": 0.85
+  },
+  "battle/live_replay": {
+    "box": [
+      1660,
+      860,
+      250,
+      56
+    ],
+    "region": [
+      1580,
+      800,
+      340,
+      160
+    ],
+    "threshold": 0.8
+  },
+  "battle/surrender": {
+    "box": [
+      28,
+      828,
+      172,
+      42
+    ],
+    "region": [
+      0,
+      768,
+      260,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "bb/menu_close": {
+    "box": [
+      1595,
+      162,
+      75,
+      72
+    ],
+    "region": [
+      1535,
+      102,
+      195,
+      192
+    ],
+    "threshold": 0.85
+  },
+  "bb/return_home": {
+    "box": [
+      850,
+      870,
+      220,
+      85
+    ],
+    "region": [
+      790,
+      810,
+      340,
+      205
+    ],
+    "threshold": 0.85
+  },
+  "bb/star_bonus_okay": {
+    "box": [
+      825,
+      778,
+      270,
+      100
+    ],
+    "region": [
+      765,
+      718,
+      390,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "bb/trophy_hammer": {
+    "box": [
+      205,
+      218,
+      48,
+      52
+    ],
+    "region": [
+      170,
+      190,
+      120,
+      110
+    ],
+    "threshold": 0.85
+  },
+  "boat/icon": {
+    "box": [
+      447,
+      748,
+      37,
+      34
+    ],
+    "region": [
+      0,
+      90,
+      1920,
+      900
+    ],
+    "threshold": 0.82
+  },
+  "build/close": {
+    "box": [
+      1866,
+      12,
+      48,
+      46
+    ],
+    "region": [
+      1830,
+      0,
+      90,
+      90
+    ],
+    "threshold": 0.85
+  },
+  "building/place_cancel": {
+    "box": [
+      911,
+      284,
+      34,
+      33
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "building/place_ok": {
+    "box": [
+      977,
+      284,
+      34,
+      33
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "chat/close": {
+    "box": [
+      625,
+      450,
+      58,
+      100
+    ],
+    "region": [
+      565,
+      390,
+      178,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "chest/continue": {
+    "box": [
+      850,
+      945,
+      250,
+      62
+    ],
+    "region": [
+      790,
+      885,
+      370,
+      182
+    ],
+    "threshold": 0.85
+  },
+  "chest/pedestal": {
+    "box": [
+      640,
+      860,
+      640,
+      150
+    ],
+    "region": [
+      580,
+      800,
+      760,
+      270
+    ],
+    "threshold": 0.8
+  },
+  "chest/room": {
+    "box": [
+      1390,
+      0,
+      70,
+      600
+    ],
+    "region": [
+      1330,
+      0,
+      190,
+      660
+    ],
+    "threshold": 0.8
+  },
+  "chest/tap_text": {
+    "box": [
+      895,
+      250,
+      105,
+      50
+    ],
+    "region": [
+      700,
+      150,
+      520,
+      260
+    ],
+    "threshold": 0.85
+  },
+  "donate/window_title": {
+    "box": [
+      662,
+      268,
+      352,
+      46
+    ],
+    "region": [
+      600,
+      0,
+      900,
+      760
+    ],
+    "threshold": 0.85
+  },
+  "home/build_button": {
+    "box": [
+      1758,
+      915,
+      116,
+      125
+    ],
+    "region": [
+      1690,
+      850,
+      230,
+      230
+    ],
+    "threshold": 0.85
+  },
+  "home/dark_drop": {
+    "box": [
+      1858,
+      153,
+      38,
+      42
+    ],
+    "region": [
+      1800,
+      110,
+      120,
+      130
+    ],
+    "threshold": 0.85
+  },
+  "home/gem_plus": {
+    "box": [
+      1647,
+      150,
+      40,
+      40
+    ],
+    "region": [
+      1600,
+      120,
+      140,
+      230
+    ],
+    "threshold": 0.85
+  },
+  "lab/close": {
+    "box": [
+      1555,
+      38,
+      80,
+      75
+    ],
+    "region": [
+      1495,
+      0,
+      200,
+      173
+    ],
+    "threshold": 0.85
+  },
+  "lab/in_progress_title": {
+    "box": [
+      720,
+      52,
+      475,
+      46
+    ],
+    "region": [
+      660,
+      0,
+      595,
+      158
+    ],
+    "threshold": 0.85
+  },
+  "popup/anyone_there": {
+    "box": [
+      584,
+      448,
+      200,
+      36
+    ],
+    "region": [
+      524,
+      388,
+      320,
+      156
+    ],
+    "threshold": 0.85
+  },
+  "popup/close_x": {
+    "box": [
+      1580,
+      120,
+      72,
+      72
+    ],
+    "region": [
+      1300,
+      60,
+      560,
+      260
+    ],
+    "threshold": 0.85
+  },
+  "popup/close_x~2": {
+    "box": [
+      1694,
+      44,
+      50,
+      52
+    ],
+    "region": [
+      1220,
+      0,
+      700,
+      330
+    ],
+    "threshold": 0.85
+  },
+  "popup/close_x~tournament": {
+    "box": [
+      1548,
+      48,
+      70,
+      70
+    ],
+    "region": [
+      1488,
+      0,
+      190,
+      178
+    ],
+    "threshold": 0.85
+  },
+  "popup/continue_green": {
+    "box": [
+      875,
+      875,
+      170,
+      60
+    ],
+    "region": [
+      600,
+      700,
+      720,
+      330
+    ],
+    "threshold": 0.85
+  },
+  "popup/daily_claim": {
+    "box": [
+      285,
+      416,
+      234,
+      80
+    ],
+    "region": [
+      260,
+      380,
+      1320,
+      470
+    ],
+    "threshold": 0.85
+  },
+  "popup/daily_title": {
+    "box": [
+      755,
+      140,
+      360,
+      55
+    ],
+    "region": [
+      695,
+      80,
+      480,
+      175
+    ],
+    "threshold": 0.85
+  },
+  "popup/exit_title": {
+    "box": [
+      800,
+      338,
+      324,
+      46
+    ],
+    "region": [
+      740,
+      278,
+      444,
+      166
+    ],
+    "threshold": 0.85
+  },
+  "popup/hoggy_title": {
+    "box": [
+      705,
+      195,
+      515,
+      50
+    ],
+    "region": [
+      645,
+      135,
+      635,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "popup/maintenance": {
+    "box": [
+      779,
+      8,
+      365,
+      44
+    ],
+    "region": [
+      700,
+      0,
+      520,
+      80
+    ],
+    "threshold": 0.8
+  },
+  "popup/reload": {
+    "box": [
+      584,
+      600,
+      152,
+      34
+    ],
+    "region": [
+      524,
+      540,
+      272,
+      154
+    ],
+    "threshold": 0.85
+  },
+  "popup/reload_device": {
+    "box": [
+      578,
+      597,
+      99,
+      40
+    ],
+    "region": [
+      458,
+      477,
+      339,
+      280
+    ],
+    "threshold": 0.8
+  },
+  "popup/shield_continue": {
+    "box": [
+      885,
+      880,
+      155,
+      45
+    ],
+    "region": [
+      825,
+      820,
+      275,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "popup/shield_title": {
+    "box": [
+      830,
+      295,
+      260,
+      50
+    ],
+    "region": [
+      770,
+      235,
+      380,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "popup/speech_corner": {
+    "box": [
+      441,
+      690,
+      60,
+      40
+    ],
+    "region": [
+      0,
+      300,
+      1920,
+      780
+    ],
+    "threshold": 0.8
+  },
+  "popup/try_again": {
+    "box": [
+      573,
+      597,
+      129,
+      40
+    ],
+    "region": [
+      453,
+      477,
+      369,
+      280
+    ],
+    "threshold": 0.8
+  },
+  "request/title": {
+    "box": [
+      640,
+      132,
+      640,
+      60
+    ],
+    "region": [
+      580,
+      72,
+      760,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "results/claim_reward": {
+    "box": [
+      805,
+      895,
+      320,
+      66
+    ],
+    "region": [
+      745,
+      835,
+      440,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "results/return_home": {
+    "box": [
+      852,
+      892,
+      218,
+      82
+    ],
+    "region": [
+      792,
+      832,
+      338,
+      202
+    ],
+    "threshold": 0.85
+  },
+  "scout/available_loot": {
+    "box": [
+      80,
+      95,
+      136,
+      24
+    ],
+    "region": [
+      20,
+      35,
+      256,
+      144
+    ],
+    "threshold": 0.85
+  },
+  "scout/end_battle": {
+    "box": [
+      28,
+      828,
+      172,
+      42
+    ],
+    "region": [
+      0,
+      768,
+      260,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "scout/next": {
+    "box": [
+      1662,
+      772,
+      236,
+      50
+    ],
+    "region": [
+      1602,
+      712,
+      318,
+      170
+    ],
+    "threshold": 0.85
+  },
+  "settings/close": {
+    "box": [
+      1592,
+      94,
+      58,
+      58
+    ],
+    "region": [
+      1560,
+      60,
+      120,
+      120
+    ],
+    "threshold": 0.85
+  },
+  "settings/close~2": {
+    "box": [
+      1694,
+      44,
+      50,
+      52
+    ],
+    "region": [
+      1570,
+      0,
+      350,
+      200
+    ],
+    "threshold": 0.85
+  },
+  "settings/switch_id": {
+    "box": [
+      1202,
+      194,
+      72,
+      66
+    ],
+    "region": [
+      1142,
+      134,
+      192,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "settings/switch_id~2": {
+    "box": [
+      1341,
+      138,
+      66,
+      66
+    ],
+    "region": [
+      1281,
+      78,
+      186,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "settings/tab": {
+    "box": [
+      1520,
+      57,
+      133,
+      38
+    ],
+    "region": [
+      1460,
+      0,
+      253,
+      155
+    ],
+    "threshold": 0.85
+  },
+  "settings/title": {
+    "box": [
+      1380,
+      88,
+      190,
+      76
+    ],
+    "region": [
+      1340,
+      60,
+      270,
+      130
+    ],
+    "threshold": 0.85
+  },
+  "settings/title~2": {
+    "box": [
+      1520,
+      57,
+      133,
+      38
+    ],
+    "region": [
+      1460,
+      0,
+      253,
+      155
+    ],
+    "threshold": 0.85
+  },
+  "shop/close": {
+    "box": [
+      1822,
+      32,
+      72,
+      72
+    ],
+    "region": [
+      1762,
+      0,
+      158,
+      164
+    ],
+    "threshold": 0.85
+  },
+  "shop/title": {
+    "box": [
+      815,
+      175,
+      290,
+      60
+    ],
+    "region": [
+      755,
+      115,
+      410,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "sid/close": {
+    "box": [
+      1845,
+      32,
+      42,
+      42
+    ],
+    "region": [
+      1785,
+      0,
+      135,
+      134
+    ],
+    "threshold": 0.85
+  },
+  "sid/switch_id_label": {
+    "box": [
+      1560,
+      385,
+      120,
+      85
+    ],
+    "region": [
+      1500,
+      325,
+      240,
+      205
+    ],
+    "threshold": 0.85
+  },
+  "sid/switch_id_label~2": {
+    "box": [
+      1624,
+      411,
+      92,
+      66
+    ],
+    "region": [
+      1564,
+      351,
+      212,
+      186
+    ],
+    "threshold": 0.85
+  },
+  "upgrade/close": {
+    "box": [
+      1668,
+      38,
+      80,
+      75
+    ],
+    "region": [
+      1608,
+      0,
+      200,
+      173
+    ],
+    "threshold": 0.85
+  },
+  "upgrade/confirm": {
+    "box": [
+      1285,
+      882,
+      140,
+      34
+    ],
+    "region": [
+      900,
+      820,
+      900,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "village/bubble_dark": {
+    "box": [
+      1300,
+      511,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "village/bubble_elixir": {
+    "box": [
+      806,
+      76,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "village/bubble_gold": {
+    "box": [
+      931,
+      216,
+      34,
+      34
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.8
+  },
+  "wall/dialog_title": {
+    "box": [
+      775,
+      342,
+      372,
+      56
+    ],
+    "region": [
+      560,
+      280,
+      800,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/army_button": {
+    "box": [
+      222,
+      972,
+      92,
+      88
+    ],
+    "region": [
+      162,
+      912,
+      212,
+      168
+    ],
+    "threshold": 0.85
+  },
+  "raid/army_ready": {
+    "box": [
+      185,
+      160,
+      500,
+      125
+    ],
+    "region": [
+      145,
+      120,
+      580,
+      205
+    ],
+    "threshold": 0.95
+  },
+  "raid/army_save": {
+    "box": [
+      1131,
+      448,
+      129,
+      46
+    ],
+    "region": [
+      1071,
+      388,
+      249,
+      166
+    ],
+    "threshold": 0.85
+  },
+  "raid/army_title": {
+    "box": [
+      750,
+      30,
+      390,
+      36
+    ],
+    "region": [
+      690,
+      0,
+      510,
+      126
+    ],
+    "threshold": 0.85
+  },
+  "raid/army_trash": {
+    "box": [
+      772,
+      444,
+      46,
+      54
+    ],
+    "region": [
+      712,
+      384,
+      166,
+      174
+    ],
+    "threshold": 0.85
+  },
+  "raid/attack_go": {
+    "box": [
+      1405,
+      583,
+      150,
+      46
+    ],
+    "region": [
+      1300,
+      520,
+      360,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "raid/attack_go~2": {
+    "box": [
+      1566,
+      582,
+      150,
+      42
+    ],
+    "region": [
+      1506,
+      522,
+      270,
+      162
+    ],
+    "threshold": 0.85
+  },
+  "raid/attack_now_title": {
+    "box": [
+      800,
+      195,
+      320,
+      50
+    ],
+    "region": [
+      600,
+      150,
+      720,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "raid/attack_now_title~2": {
+    "box": [
+      798,
+      108,
+      325,
+      46
+    ],
+    "region": [
+      738,
+      48,
+      445,
+      166
+    ],
+    "threshold": 0.85
+  },
+  "raid/attacking_title": {
+    "box": [
+      835,
+      45,
+      255,
+      40
+    ],
+    "region": [
+      700,
+      20,
+      520,
+      100
+    ],
+    "threshold": 0.85
+  },
+  "raid/attacking_title~2": {
+    "box": [
+      828,
+      44,
+      265,
+      38
+    ],
+    "region": [
+      768,
+      0,
+      385,
+      142
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_end": {
+    "box": [
+      910,
+      934,
+      100,
+      46
+    ],
+    "region": [
+      850,
+      874,
+      220,
+      166
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_frost": {
+    "box": [
+      275,
+      955,
+      96,
+      62
+    ],
+    "region": [
+      160,
+      915,
+      1600,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_graveyard": {
+    "box": [
+      396,
+      955,
+      96,
+      62
+    ],
+    "region": [
+      160,
+      915,
+      1600,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_miner": {
+    "box": [
+      142,
+      955,
+      95,
+      62
+    ],
+    "region": [
+      160,
+      915,
+      1600,
+      165
+    ],
+    "threshold": 0.85
+  },
+  "raid/battle_starts": {
+    "box": [
+      868,
+      18,
+      185,
+      30
+    ],
+    "region": [
+      760,
+      0,
+      400,
+      80
+    ],
+    "threshold": 0.85
+  },
+  "raid/capital_title": {
+    "box": [
+      905,
+      45,
+      180,
+      36
+    ],
+    "region": [
+      780,
+      20,
+      360,
+      90
+    ],
+    "threshold": 0.85
+  },
+  "raid/district_bar": {
+    "box": [
+      858,
+      945,
+      155,
+      62
+    ],
+    "region": [
+      500,
+      860,
+      1000,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "raid/map_button": {
+    "box": [
+      40,
+      920,
+      140,
+      120
+    ],
+    "region": [
+      0,
+      860,
+      240,
+      220
+    ],
+    "threshold": 0.85
+  },
+  "raid/next_raid": {
+    "box": [
+      855,
+      925,
+      210,
+      46
+    ],
+    "region": [
+      700,
+      860,
+      520,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "raid/raid_info": {
+    "box": [
+      1770,
+      980,
+      90,
+      60
+    ],
+    "region": [
+      1700,
+      900,
+      220,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/raid_map": {
+    "box": [
+      1775,
+      975,
+      80,
+      70
+    ],
+    "region": [
+      1700,
+      900,
+      220,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/return_home": {
+    "box": [
+      40,
+      985,
+      135,
+      60
+    ],
+    "region": [
+      0,
+      900,
+      260,
+      180
+    ],
+    "threshold": 0.85
+  },
+  "raid/return_home~2": {
+    "box": [
+      40,
+      985,
+      135,
+      60
+    ],
+    "region": [
+      0,
+      925,
+      235,
+      155
+    ],
+    "threshold": 0.85
+  },
+  "raid/spell_frost": {
+    "box": [
+      1090,
+      880,
+      118,
+      100
+    ],
+    "region": [
+      330,
+      660,
+      1270,
+      390
+    ],
+    "threshold": 0.9
+  },
+  "raid/spell_graveyard": {
+    "box": [
+      1420,
+      880,
+      118,
+      100
+    ],
+    "region": [
+      330,
+      660,
+      1270,
+      390
+    ],
+    "threshold": 0.9
+  },
+  "raid/unit_super_miner": {
+    "box": [
+      404,
+      880,
+      115,
+      100
+    ],
+    "region": [
+      330,
+      660,
+      1270,
+      390
+    ],
+    "threshold": 0.9
+  },
+  "army/cc_remove": {
+    "box": [
+      1395,
+      760,
+      40,
+      40
+    ],
+    "region": [
+      1335,
+      700,
+      160,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "army/cc_title": {
+    "box": [
+      845,
+      760,
+      135,
+      40
+    ],
+    "region": [
+      785,
+      700,
+      255,
+      160
+    ],
+    "threshold": 0.85
+  },
+  "army/request_button": {
+    "box": [
+      1633,
+      800,
+      150,
+      72
+    ],
+    "region": [
+      1573,
+      740,
+      270,
+      192
+    ],
+    "threshold": 0.85
+  },
+  "army/request_cooldown": {
+    "box": [
+      1675,
+      795,
+      115,
+      70
+    ],
+    "region": [
+      1615,
+      735,
+      235,
+      190
+    ],
+    "threshold": 0.85
+  },
+  "chat/challenge": {
+    "box": [
+      318,
+      1005,
+      140,
+      50
+    ],
+    "region": [
+      258,
+      945,
+      260,
+      135
+    ],
+    "threshold": 0.85
+  },
+  "chat/donate_button": {
+    "box": [
+      410,
+      893,
+      134,
+      40
+    ],
+    "region": [
+      0,
+      80,
+      615,
+      920
+    ],
+    "threshold": 0.85
+  },
+  "chat/jump_latest": {
+    "box": [
+      22,
+      912,
+      62,
+      72
+    ],
+    "region": [
+      0,
+      852,
+      144,
+      192
+    ],
+    "threshold": 0.85
+  },
+  "chat/request_button": {
+    "box": [
+      482,
+      1000,
+      108,
+      60
+    ],
+    "region": [
+      422,
+      940,
+      228,
+      140
+    ],
+    "threshold": 0.85
+  },
+  "chat/rules_understand": {
+    "box": [
+      140,
+      683,
+      316,
+      52
+    ],
+    "region": [
+      80,
+      623,
+      436,
+      172
+    ],
+    "threshold": 0.85
+  },
+  "donate/archer": {
+    "box": [
+      793,
+      412,
+      56,
+      44
+    ],
+    "region": [
+      630,
+      375,
+      840,
+      530
+    ],
+    "threshold": 0.8
+  },
+  "donate/balloon": {
+    "box": [
+      1248,
+      412,
+      56,
+      44
+    ],
+    "region": [
+      630,
+      375,
+      840,
+      530
+    ],
+    "threshold": 0.8
+  },
+  "donate/lightning": {
+    "box": [
+      668,
+      760,
+      56,
+      44
+    ],
+    "region": [
+      630,
+      700,
+      840,
+      200
+    ],
+    "threshold": 0.8
+  },
+  "donate/stone_slammer": {
+    "box": [
+      1008,
+      318,
+      82,
+      58
+    ],
+    "region": [
+      630,
+      140,
+      840,
+      720
+    ],
+    "threshold": 0.8
+  },
+  "donate/super_wizard": {
+    "box": [
+      1350,
+      553,
+      70,
+      55
+    ],
+    "region": [
+      630,
+      140,
+      840,
+      720
+    ],
+    "threshold": 0.8
+  },
+  "home/chat_button": {
+    "box": [
+      32,
+      500,
+      80,
+      92
+    ],
+    "region": [
+      0,
+      440,
+      200,
+      200
+    ],
+    "threshold": 0.85
+  },
+  "home/social_button": {
+    "box": [
+      22,
+      440,
+      90,
+      106
+    ],
+    "region": [
+      0,
+      380,
+      172,
+      226
+    ],
+    "threshold": 0.85
+  },
+  "request/send": {
+    "box": [
+      1005,
+      668,
+      295,
+      120
+    ],
+    "region": [
+      945,
+      608,
+      415,
+      240
+    ],
+    "threshold": 0.85
+  },
+  "request/text_box": {
+    "box": [
+      600,
+      466,
+      724,
+      166
+    ],
+    "region": [
+      540,
+      406,
+      844,
+      286
+    ],
+    "threshold": 0.8
+  },
+  "request/title~bs": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      380,
+      0,
+      1160,
+      260
+    ],
+    "threshold": 0.85
+  },
+  "upgrade/builders_busy": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "raid/new_raid": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "popup/okay_blue": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "army/recipes_tab": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "army/recipe_use": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "walls/upgrade_more": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "walls/upgrade": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "walls/confirm_title": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "walls/add_wall": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "chest/continue~slice": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "chest/skip": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "chest/skip_title": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  },
+  "chest/skip_yes": {
+    "box": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "region": [
+      0,
+      0,
+      1920,
+      1080
+    ],
+    "threshold": 0.85
+  }
+}
