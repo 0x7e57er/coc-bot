@@ -48,15 +48,22 @@ DIALOGS = ("raid/attack_now_title", "raid/attack_go")   # centred popups: looked
 # the capital army: (card in Change Capital Army, taps) - as many Super Miners as fit, 1 Frost, 2 Graveyard
 ARMY = [("raid/unit_super_miner", 12), ("raid/spell_frost", 1), ("raid/spell_graveyard", 2)]
 
-# In a raid battle, zoomed out and panned fully down and right (the finger goes up and left), the deploy
-# strip along the district's lower-right side is on screen: everything is dropped on one spot of it
-# (battlefield points; on BlueStacks 1920x1080 the spot is at 560, 650 - all 10 miners went down there on
-# Barbarian Camp). Taps that do not deploy are made again along the strip, the nearest spots first.
+# In a raid battle the game lights up where troops can go: pale green with a white outline - the district's
+# edges, and every part of it that is already destroyed, so it is different on each district and grows during
+# the raid. The army goes on the lit spot nearest the middle of the screen (the district, zoomed out).
+ZONE_MIN = 6000                    # a lit area smaller than this (game-space px) is not a deploy zone
+ZONE_GAP = 70                      # the spots tried one after another are this far apart
+ZONE_BAR = 880                     # the card bar starts here (base y): no spot below it
+ZONE_UI = [(0, 0, 480, 260), (760, 0, 400, 120), (1440, 0, 480, 230), (0, 740, 280, 140),
+           (1560, 720, 360, 160)]  # name and loot, timer, resources, End Battle, damage: never a spot
+# No lit zone seen: zoomed out and panned fully down and right (the finger goes up and left), the deploy
+# strip along Barbarian Camp's lower-right side is on screen (battlefield points; on BlueStacks 1920x1080
+# the spot is at 560, 650). Taps that do not deploy are made again along the strip, the nearest spots first.
 PAN = ((1466, 784), (623, 268))
 DEPLOY = (586, 643)
 BACKUP = [(-36, 22), (36, -22), (10, 16), (-10, -16), (-103, 64), (103, -64), (-183, 113), (183, -113)]
 BATTLE_CARDS = [("raid/battle_miner", 10), ("raid/battle_frost", 1), ("raid/battle_graveyard", 2)]
-CLOSE_AFTER = 2.0                  # seconds from the last deploy to closing the game (the taps reach the server)
+CLOSE_AFTER = 1.0                  # seconds from the last deploy to closing the game (the taps reach the server)
 
 
 def window(now=None):
@@ -213,9 +220,10 @@ def _card(frame, key):
 
 
 def set_army(bot):
-    """Change Capital Army (the button bottom left of the Capital and of the raid map): delete the army,
-    then Super Miners only (as many as fit), 1 Frost and 2 Graveyard, Save. True when it was saved; when
-    a card is missing the window is cancelled and the army stays as it was."""
+    """Change Capital Army (the button bottom left of the Capital and of the raid map): already Super Miners,
+    1 Frost and 2 Graveyard -> Cancel; else delete the army, then Super Miners only (as many as fit), 1 Frost
+    and 2 Graveyard, Save. True when the army is right; when a card is missing the window is cancelled and
+    the army stays as it was."""
     title = None
     for _ in range(3):                  # a tap while the Capital is still flying in is lost: again
         if not bot.tap_template("raid/army_button", timeout=5):
@@ -226,23 +234,30 @@ def set_army(bot):
     if not title:
         bot.save_error("raid-army-window")
         return False
+    cancel = (title.x + space.s(30), title.y + space.s(331))
+    ready = (title.x - space.s(640), title.y + space.s(72), space.s(580), space.s(205))   # the army's row
+    if vision.find(bot.shot(), "raid/army_ready", region=ready):
+        log.info("Raid army: already Super Miners, 1 Frost, 2 Graveyard")
+        bot.tap(*cancel, jitter=3)
+        return bot.wait_gone("raid/army_title", 5)
     if bot.find("raid/army_trash"):                          # red while the army has units
-        bot.tap_template("raid/army_trash", timeout=2, after=0.8)
+        bot.tap_template("raid/army_trash", timeout=2, after=0.5)
     row = title.y + space.s(610)                             # the unit list, under the buttons
     for _ in range(2):         # it starts with Super Barbarian: the Super Miner and the spells are at its end
-        bot.swipe((title.x + space.s(450), row), (title.x - space.s(450), row), 600)
-        control.sleep(0.6)
+        bot.swipe((title.x + space.s(450), row), (title.x - space.s(450), row), 300)
+        control.sleep(0.3)
+    control.sleep(0.3)
     for key, taps in ARMY:
         m = _card(bot.shot(), key)
         if not m:
             log.warning("Raid army: no %s to add (not unlocked in this clan?) - the army is left as it was",
                         key.split("/")[1].replace("_", " "))
             bot.save_error("raid-army")
-            bot.tap(title.x + space.s(30), title.y + space.s(331), jitter=3)    # Cancel
+            bot.tap(*cancel, jitter=3)
             bot.wait_gone("raid/army_title", 5)
             return False
-        bot.tap(m.x, m.y, jitter=4, times=taps, interval=0.25)
-        control.sleep(0.4)
+        bot.tap_burst(m, taps, interval=0.08)
+        control.sleep(0.3)
     bot.tap_template("raid/army_save", timeout=3)
     return bot.wait_gone("raid/army_title", 6)
 
@@ -406,36 +421,71 @@ def start_attack(bot):
     return "failed"
 
 
+def deploy_spots(frame, n=6):
+    """The lit deploy zone of a raid battle: up to n spots well inside it, the nearest to the middle of the
+    screen first, ZONE_GAP apart. [] when no zone is seen."""
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    hue, sat, val = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    lit = ((hue >= 35) & (hue <= 80) & (sat >= 50) & (sat <= 125) & (val >= 165)).astype(np.uint8)
+    lit[space.point(0, ZONE_BAR)[1]:, :] = 0
+    for box in ZONE_UI:
+        x, y, w, h = space.region(*box)
+        lit[max(0, y):max(0, y + h), max(0, x):max(0, x + w)] = 0
+    lit = cv2.morphologyEx(lit, cv2.MORPH_CLOSE, np.ones((13, 13), np.uint8))   # flowers, stones, troops
+    lit = cv2.morphologyEx(lit, cv2.MORPH_OPEN, np.ones((17, 17), np.uint8))
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(lit)
+    keep = [i for i in range(1, count) if stats[i][4] >= ZONE_MIN]
+    if not keep:
+        return []
+    zone = cv2.erode(np.isin(labels, keep).astype(np.uint8), np.ones((21, 21), np.uint8))   # well inside
+    ys, xs = np.nonzero(zone)
+    order = np.argsort((xs - space.w / 2) ** 2 + (ys - space.h / 2) ** 2)
+    spots = []
+    for i in order[::7]:
+        p = (int(xs[i]), int(ys[i]))
+        if all((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 >= ZONE_GAP ** 2 for q in spots):
+            spots.append(p)
+            if len(spots) == n:
+                break
+    return spots
+
+
 def deploy(bot):
-    """In the raid battle: zoom out, pan fully down and right, then each card of the army on the deploy
-    spot - the Super Miners first. While a card still has something left (a tap that did not deploy, or a
-    bigger army), one more tap at a time along the strip."""
+    """In the raid battle: zoom out, find the lit deploy zone and drop each card of the army on its spot
+    nearest the district - the Super Miners first, the spells where they went. While a card still has
+    something left (the spot was not in the zone), the same again on the next spot. No zone seen: pan fully
+    down and right and use the strip of Barbarian Camp."""
     bot.device.zoom_out()
-    control.sleep(0.5)
-    for _ in range(4):
-        bot.swipe(space.center(*PAN[0]), space.center(*PAN[1]), 500)
-        control.sleep(0.3)
-    control.sleep(0.8)
-    spot = space.center(*DEPLOY)
-    backup = [(spot[0] + int(space.f(dx)), spot[1] + int(space.f(dy))) for dx, dy in BACKUP]
+    control.sleep(0.4)
+    spots = deploy_spots(bot.shot())
+    if spots:
+        log.info("Raid: deploy zone found - dropping the army at %d, %d", *spots[0])
+    else:
+        log.info("Raid: no lit deploy zone seen - the fixed spot of Barbarian Camp")
+        bot.save_error("raid-no-zone")
+        for _ in range(4):
+            bot.swipe(space.center(*PAN[0]), space.center(*PAN[1]), 500)
+            control.sleep(0.3)
+        control.sleep(0.6)
+        spot = space.center(*DEPLOY)
+        spots = [spot] + [(spot[0] + int(space.f(dx)), spot[1] + int(space.f(dy))) for dx, dy in BACKUP]
     for key, taps in BATTLE_CARDS:
         control.checkpoint()
         card = _card(bot.shot(), key)
         if not card:
             log.info("Raid: no %s to deploy", key.split("_", 1)[1])
             continue
-        bot.tap_match(card)
-        control.sleep(0.3)
-        bot.tap(*spot, jitter=2, times=taps, interval=0.2)
-        for x, y in backup * 2:
-            control.sleep(0.4)
+        bot.tap_match(card, jitter=2)
+        control.sleep(0.25)
+        for i, (x, y) in enumerate(spots):
+            bot.device.tap_burst(x, y, taps, 0.06)
+            control.sleep(0.35)
             if not _card(bot.shot(), key):
+                spots.insert(0, spots.pop(i))        # this spot deploys: the next card goes there too
                 break
-            bot.tap(x, y, jitter=2)
         else:
-            log.warning("Raid: some %s could not be deployed on the strip", key.split("_", 1)[1])
+            log.warning("Raid: some %s could not be deployed", key.split("_", 1)[1])
             bot.save_error("raid-deploy")
-        control.sleep(0.4)
 
 
 def restart(bot):
@@ -444,15 +494,19 @@ def restart(bot):
     bot.device.close_game()
     end = time.monotonic() + 20
     while bot.device.is_game_running() and time.monotonic() < end:
-        control.sleep(0.5)
-    control.sleep(1.0)
+        control.sleep(0.3)
     states.ensure_game(bot)
 
 
 def leave(bot):
-    """From the raid map back to the village: Map -> the Clan Capital -> Return Home (else restart)."""
-    for key in ("raid/map_button", "raid/return_home"):
-        if not bot.tap_template(key, timeout=8, after=2.0):
+    """From the raid map or the Clan Capital back to the village: Map -> the Clan Capital -> Return Home
+    (else restart)."""
+    for _ in range(2):
+        key = _wait_any(bot, ["raid/return_home", "raid/map_button"], 8)
+        if not key:
+            break
+        bot.tap_template(key, timeout=2, after=2.0)
+        if key == "raid/return_home":
             break
     if not go_home(bot, 30):
         restart(bot)

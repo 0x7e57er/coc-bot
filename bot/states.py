@@ -548,10 +548,11 @@ def ensure_game(bot, timeout=150.0):
         while not dev.is_game_running():
             if time.monotonic() - start > 60:
                 raise BotError("Clash of Clans did not start")
-            control.sleep(2)
-        for _ in range(4):                    # the store window can appear a little after the game
+            control.sleep(0.5)
+        for i in range(dev.tidy_rounds):      # Google Play Games' store window can appear a little after the game
+            if i:
+                control.sleep(2)
             dev.tidy_up()
-            control.sleep(2)
     else:
         dev.tidy_up()
     if not go_home(bot, timeout):

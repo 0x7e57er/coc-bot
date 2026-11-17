@@ -89,12 +89,14 @@ the key on each troop card, so it works with whatever the account has.
 
 Friday 12:30 to Monday 12:30 (India time), the **Raid Weekend** option does each account's raid attacks:
 zoom out, the airship by the river → Clan Capital (the red "5 ⚔" over Raid Map = attacks left) → Change Capital
-Army: delete it, Super Miners only, 1 Frost, 2 Graveyard, Save → Raid Map → the districts from the top down, each
-until it is destroyed (Builder's Workshop, Golem Quarry, Goblin Mines and Skeleton Park after swiping the map up;
-Capital Peak last) → zoom out, pan fully down and right → everything on one spot of the deploy strip along the
-district's lower-right side (more taps along the strip when a tap does not deploy) → the game is closed and opened
-again with ADB (no waiting for the battle to end) → the airship again for the next attack. Set up and
-checked on BlueStacks at 1920×1080.
+Army (once per account and run; nothing to do when it already is Super Miners, 1 Frost, 2 Graveyard): delete it,
+Super Miners only, 1 Frost, 2 Graveyard, Save → Raid Map → the districts from the top down, each until it is
+destroyed (Builder's Workshop, Golem Quarry, Goblin Mines and Skeleton Park after swiping the map up; Capital Peak
+last) → zoom out → everything on the spot of the lit deploy zone nearest the district (the game lights up where
+troops can go: the district's edges and its destroyed parts, different on every district; the next spot when a card
+is not used up there) → the game is closed and opened again with ADB (no waiting for the battle to end) → the airship
+again for the next attack. No lit zone seen: the old fixed spot of Barbarian Camp, and a screenshot in `logs/errors/`.
+Set up and checked on BlueStacks at 1920×1080.
 
 ## Smart donations (Donate page)
 

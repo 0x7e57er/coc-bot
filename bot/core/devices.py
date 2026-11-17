@@ -77,6 +77,8 @@ class Device:
     def describe(self):
         return self.kind
 
+    tidy_rounds = 1         # how often tidy_up is called after a start, 2 s apart
+
     def tidy_up(self):
         """Called once the game is up (e.g. close windows a launcher opened next to it)."""
 
@@ -290,6 +292,8 @@ class PcDevice(Device):
 
     def launch_game(self):
         self.window.launch()
+
+    tidy_rounds = 4         # the store window can appear a few seconds after the game
 
     def tidy_up(self):
         """After a start: close the Google Play Games store window that opens with the game."""
@@ -699,6 +703,8 @@ class BlueStacksDevice(PcDevice):
 
     def close_game(self):
         self._run("shell", "am", "force-stop", self.package)
+
+    tidy_rounds = 1
 
     def tidy_up(self):
         self.full_screen()

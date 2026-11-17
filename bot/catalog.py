@@ -65,6 +65,8 @@ CATALOG = [
     ("raid/army_title", "Clan Capital", "'Change Capital Army' title", False),
     ("raid/army_trash", "Clan Capital", "The red trash can of Change Capital Army (army not empty)", False),
     ("raid/army_save", "Clan Capital", "The green 'Save' of Change Capital Army", False),
+    ("raid/army_ready", "Clan Capital", "The army row of Change Capital Army when it is 10x Super Miner, 1x Frost, "
+                                        "2x Graveyard and nothing else", False),
     ("raid/unit_super_miner", "Clan Capital", "The Super Miner card in the unit list (in colour)", False),
     ("raid/spell_frost", "Clan Capital", "The Frost spell card in the unit list (in colour)", False),
     ("raid/spell_graveyard", "Clan Capital", "The Graveyard spell card in the unit list (in colour)", False),

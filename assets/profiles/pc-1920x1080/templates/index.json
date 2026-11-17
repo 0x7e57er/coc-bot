@@ -1589,6 +1589,21 @@
     ],
     "threshold": 0.85
   },
+  "raid/army_ready": {
+    "box": [
+      185,
+      160,
+      500,
+      125
+    ],
+    "region": [
+      145,
+      120,
+      580,
+      205
+    ],
+    "threshold": 0.95
+  },
   "raid/army_save": {
     "box": [
       1131,
