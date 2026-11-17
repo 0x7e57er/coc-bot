@@ -118,7 +118,11 @@ python main.py --check              only check the setup, and save what the bot 
    there is no recipe to use, the account attacks with the army it has, and the log says so.
 5. **Search**: Attack > Find a Match > Attack!. Then it presses Next until a base has at least the
    `min_loot` for this account's Town Hall. The loot numbers are read with the game's own digit
-   images. It gives up after 150 searches.
+   images. It gives up after 150 searches. The rows of "Available Loot" are found where they are (the
+   text is located first, and the icon left of each number says gold, elixir or dark), so a loot event
+   still reads: "Loot Available 2x:" moves the rows, draws the numbers yellow and puts a 2x icon after
+   each. The log then says "(2x loot event)". The numbers shown are what the attack gives, so the
+   minimum is compared with them as they are. The battle reads the loot left the same way.
 6. **Attack** (`edrag_clone` plan): the bot finds the base's buildings and puts a deploy ring just
    outside the red area. It reads the troop bar by what its cards are, not by their place. Cards with
    an "x11" count left of the heroes are troops; cards without a count are the siege machine and the
@@ -215,18 +219,21 @@ elixir, always keep 5 lakh of each. Walls go cheapest first, with **both** resou
 Each batch:
 
 1. The Build panel lists the walls by level, for example "Wall x 25 - 1,000" (25 walls, 1,000 each).
-   The list is read once per visit, about 50 s. The account's cheapest wall is remembered, so a visit
-   that cannot pay even that one does not open the list.
-2. The wall row is tapped: one wall of that level is selected. Then the game's **Upgrade More**.
-3. **Add Wall** (+10, +1) until the walls the budget pays for are selected. The count is read after
-   every tap.
-4. **Upgrade** with the chosen resource. The total on the button must be a whole number of walls, within
-   what may be spent, and match the count in the title.
+   The list is read once per visit, about 20-30 s: on each page only the names are read, and the cost
+   only under a name that is a wall. A visit whose loot pays for no wall the account has does not open
+   the list.
+2. The wall row is tapped: one wall of that level is selected. Then the game's **Upgrade More**. The
+   next batch finds its row where the list already is; the list is opened again only when it moved.
+3. **Add Wall** (+10, +1): every wall still missing is tapped in one go, then the total is read once
+   (again only when a tap was lost).
+4. **Upgrade** with the chosen resource. The total on the button must be a whole number of walls, no more
+   than the row has, and within what may be spent.
 5. "Upgrade Walls - ... for 50000 Gold?" -> **Okay** only when the box asks exactly that amount of that
    resource. Otherwise, or when its Okay does not show, Cancel: the box is never left open. Never gems.
-6. The walls count only when the storage on screen really went down by that amount.
+6. The walls count only when the storage really went down by that amount. While the Build panel is open
+   the storage bar sits left of it, and it is read there.
 
-Walls upgrade at once (no builder). The log shows each level done and the storages before and after.
+A batch takes about 10 s. The log shows each level done and the storages before and after.
 
 ## Loot + donate
 

@@ -21,9 +21,10 @@ import logging
 import re
 import time
 
-from . import config, loot, upgrade, vision
+from . import config, layout, loot, upgrade, vision
 from .context import BotError
 from .control import control
+from .space import space
 from .states import go_home
 
 log = logging.getLogger("bot")
@@ -39,18 +40,56 @@ def _count(text):
     return int(m[-1]) if m else None
 
 
+def _rows_on(frame, x):
+    """The wall rows the Build panel shows now: [{"name", "cost" (one wall), "count", "y"}]. Read fast: where the
+    text is is found first (no reading), then only the names are read, and the cost only under a name that is a
+    wall - a page in about 1.5 s instead of 6."""
+    left = x.x - upgrade.PANEL_LEFT
+    boxes = vision.text_reader.boxes(frame, (left, x.y + upgrade.ROWS_TOP, upgrade.PANEL_LEFT + 20,
+                                             upgrade.ROWS_BOTTOM - upgrade.ROWS_TOP))
+    costs = [b for b in boxes if b[0] >= left + upgrade.COST_X]
+    rows = []
+    for bx, by, bw, bh in boxes:
+        if not left + upgrade.NAME_X - 20 <= bx < left + upgrade.NAME_X + 40:
+            continue                                 # only names start there (not level badges or descriptions)
+        name, conf = vision.text_reader.read_line(frame, (bx - 3, by - 3, bw + 6, bh + 6))
+        if conf < 0.5 or not upgrade.key(name).startswith("wall"):
+            continue
+        ny = by + bh // 2
+        below = [c for c in costs if 8 <= c[1] + c[3] // 2 - ny <= 40]   # the cost: the row's second line
+        if not below:
+            continue                                 # (a wall in progress has no cost)
+        cx, cy, cw, ch = min(below, key=lambda c: c[1])
+        text, _ = vision.text_reader.read_line(frame, (cx - 3, cy - 3, cw + 6, ch + 6))
+        digits = re.sub(r"[\s.,]", "", text)
+        if digits.isdigit() and int(digits) >= 100:
+            rows.append({"name": name.strip(), "cost": int(digits), "count": _count(name) or 1,
+                         "y": cy + ch // 2 - 10})
+    return rows
+
+
 def wall_rows(bot, x):
-    """Every wall row of the Build panel: [{"name", "cost" (one wall), "count", "page"}] - the list is read to its
-    end (it is opened again at its top afterwards)."""
+    """Every wall row of the Build panel: [{"name", "cost" (one wall), "count", "y", "page"}] - the list is read to
+    its end."""
     rows, seen = [], set()
     for page in range(upgrade.SCROLLS + 1):
-        for r in upgrade.read_rows(bot.shot(), x):
-            if upgrade.key(r["name"]).startswith("wall") and (r["name"], r["cost"]) not in seen:
-                seen.add((r["name"], r["cost"]))
-                rows.append(dict(r, count=_count(r["name"]) or 1, page=page))
+        for r in _rows_on(bot.shot(), x):
+            if r["cost"] not in seen:                # (one level, one cost: the same row on two pages can read
+                seen.add(r["cost"])                  #  "Wall x 15" / "Wallx 15")
+                rows.append(dict(r, page=page))
         if page == upgrade.SCROLLS or not upgrade._scroll(bot, x):
             break
     return rows
+
+
+def _storage(frame, res):
+    """The storage of `res` on screen, or None. While the Build panel is open the resource bar sits left of it
+    (moved by the panel's width), so the home place is moved with it."""
+    x, y, w, h = layout.region(f"home.{res}")
+    p = upgrade._panel(frame)
+    if p:
+        x -= space.w - (p.x - upgrade.PANEL_LEFT)
+    return vision.digits.read(frame, (x, y, w, h))
 
 
 def _buttons(frame):
@@ -189,12 +228,13 @@ def _asked(text):
 def _upgrade_level(bot, row, budget, name):
     """The wall row is tapped: Upgrade More, choose the resource, add the walls its budget pays for, Upgrade, Okay.
     Returns (walls, resource, amount), "busy" (these walls need a builder and none is free) or None."""
-    more = bot.wait("walls/upgrade_more", 4, interval=0.25)
+    more = bot.wait("walls/upgrade_more", 4, interval=0.2)
     if not more:
         log.info("Walls: no Upgrade More under the selected wall")
         return None
     bot.tap_match(more, jitter=3)
-    bot.sleep(0.9)
+    bot.wait("walls/upgrade", 3, interval=0.2)
+    bot.sleep(0.25)                                  # (the totals are drawn)
     frame = bot.shot()
     adds, ups = _buttons(frame)
     if not ups:
@@ -211,27 +251,29 @@ def _upgrade_level(bot, row, budget, name):
     want = min(row["count"], can)
     have = _have(frame, ups, res, unit) or 1
     log.debug("Walls: %s pays for %d of the %d %s wall(s); %d selected", res, can, row["count"], f"{unit:,}", have)
-    for _ in range(40):                              # Add Wall until `want` are selected
+    for _ in range(5):                               # Add Wall: every wall still missing in one burst, then one read
         if have >= want:
             break
-        # +10 only while 10 more fit (it never goes past the budget)
-        key = "+10" if want - have >= 10 and "+10" in adds else "+1" if "+1" in adds else None
-        if key is None:
+        need = want - have
+        tens = need // 10 if "+10" in adds else 0   # (+10 only while 10 more fit: never past the budget)
+        ones = need - 10 * tens if "+1" in adds else 0
+        if not tens and not ones:
             break                                    # nothing more can be added (red)
-        bot.tap_match(adds[key], jitter=2)
-        bot.sleep(0.35)
+        for m in ([adds["+10"]] * tens if tens else []) + ([adds["+1"]] * ones if ones else []):
+            bot.tap_match(m, jitter=2)
+            bot.sleep(0.15)
+        bot.sleep(0.3)
         frame = bot.shot()
         adds, ups = _buttons(frame)
         have = _have(frame, ups, res, unit) or have
     btn = next((m for m, r, _ in ups if r == res), None)
     total = _total(ups, res)
-    seen = _title_count(frame, ups)
-    if btn is None or not total or total % unit or total > budget.get(res, 0) or (seen and seen != total // unit):
+    if btn is None or not total or total % unit or total > budget.get(res, 0) or total // unit > row["count"]:
         log.warning("Walls: %s - the %s Upgrade shows %s for %s wall(s) of %s each - not upgraded", row["name"], res,
-                    f"{total:,}" if total else "?", seen or "?", f"{unit:,}")
+                    f"{total:,}" if total else "?", _title_count(frame, ups) or "?", f"{unit:,}")
         bot.save_error("walls-cost", frame)
         return None
-    had = loot.home_resources(bot).get(res)          # the storage bar stays on screen in this view
+    had = _storage(frame, res)                       # (the bar stays on screen, left of the Build panel)
     bot.tap_match(btn, jitter=3)
     if not _confirm(bot, total, res):
         return None
@@ -258,7 +300,7 @@ def _result(bot, res, had, amount, seconds=4):
         if busy:
             upgrade._close_busy(bot, busy)
             return "busy"
-        now = loot.home_resources(bot).get(res)
+        now = _storage(f, res)
         if had is not None and now is not None and had - now >= amount * 0.99:
             log.debug("Walls: %s %s -> %s", res, f"{had:,}", f"{now:,}")
             return "paid"
@@ -266,16 +308,28 @@ def _result(bot, res, had, amount, seconds=4):
     return "paid" if had is None or now is None else "unpaid"
 
 
+def _same(rows, row, page):
+    """The wall row of the same cost among `rows` (its count may have changed), or None."""
+    r = next((r for r in rows if r["cost"] == row["cost"]), None)
+    return dict(row, y=r["y"], count=r["count"], page=page) if r else None
+
+
 def _goto(bot, x, row):
-    """The panel opened again at its top and dragged to the row's page: the row as it reads there (a wall row of the
-    same cost; its count may have changed), or None."""
+    """(The row as it reads now, the panel's X). First where the list is now - after a batch it has not moved -
+    else the panel opened again at its top and dragged from the page above the row's own (upgrades move rows) to the
+    end. (None, X) when it is not there."""
+    frame = bot.shot()
+    if x and upgrade._panel(frame):
+        found = _same(_rows_on(frame, x), row, row["page"])
+        if found:
+            return found, x
     upgrade.close_panel(bot)
     x = upgrade.open_panel(bot)
-    for page in range(upgrade.SCROLLS + 1):          # from the page above its own to the end: upgrades move rows
+    for page in range(upgrade.SCROLLS + 1):
         if page >= row["page"] - 1:
-            for r in upgrade.read_rows(bot.shot(), x):
-                if upgrade.key(r["name"]).startswith("wall") and r["cost"] == row["cost"]:
-                    return dict(row, y=r["y"], count=_count(r["name"]) or row["count"], page=page), x
+            found = _same(_rows_on(bot.shot(), x), row, page)
+            if found:
+                return found, x
         if page == upgrade.SCROLLS or not upgrade._scroll(bot, x):
             break
     return None, x
@@ -283,7 +337,7 @@ def _goto(bot, x, row):
 
 def spend(bot, account):
     """Put the gold / elixir above what is kept into walls, cheapest first, with both resources. Returns the number of
-    walls upgraded. The Build list is read once per visit (about 50 s); a visit whose gold / elixir pays for no wall
+    walls upgraded. The Build list is read once per visit (about 15-25 s); a visit whose gold / elixir pays for no wall
     the account had last time does not open it at all."""
     s = bot.settings.get("walls", {})
     name = account["name"]
@@ -334,7 +388,7 @@ def spend(bot, account):
                     log.info("Walls: the %s wall row was not found again", f"{row['cost']:,}")
                     break
                 bot.tap(x.x - upgrade.PANEL_LEFT + 160, found["y"], jitter=4)
-                bot.sleep(1.2)
+                bot.sleep(0.3)                               # (Upgrade More is waited for)
                 got = _upgrade_level(bot, found, budget, name)
                 x = upgrade._panel(bot.shot()) or upgrade.open_panel(bot)
                 if got == "busy":

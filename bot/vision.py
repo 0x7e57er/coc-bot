@@ -277,6 +277,8 @@ class DigitReader:
     SIZE = (24, 30)      # every glyph is normalised to this (w, h)
     ASPECT = 0.8         # glyphs are padded to this width/height ratio first
     MIN_LEVEL = 170      # a pixel is "text" when all three colour channels are this bright
+    YELLOW_LEVEL = 215   # yellow digits: red and green this bright (a loot event's light yellow-green row band
+    #                      behind them reaches about 200)
 
     def __init__(self):
         self._templates = None
@@ -304,11 +306,13 @@ class DigitReader:
         glyph = cv2.copyMakeBorder(glyph, 0, 0, pad // 2, pad - pad // 2, cv2.BORDER_CONSTANT, value=0)
         return cv2.resize(glyph, self.SIZE, interpolation=cv2.INTER_AREA)
 
-    def glyphs(self, frame, region, min_level=None):
-        """Cut out each digit in `region`, left to right. Returns [(image, box)]."""
+    def glyphs(self, frame, region, min_level=None, yellow=False):
+        """Cut out each digit in `region`, left to right. Returns [(image, box)]. `yellow`: the digits may be
+        yellow (only red and green bright), like the loot of a loot event."""
         area, ox, oy = _crop(frame, region)
-        level = min_level or self.MIN_LEVEL
-        binary = ((area.min(axis=2) >= level) * 255).astype(np.uint8)
+        level = min_level or (self.YELLOW_LEVEL if yellow else self.MIN_LEVEL)
+        bright = area[:, :, 1:] if yellow else area
+        binary = ((bright.min(axis=2) >= level) * 255).astype(np.uint8)
         n, _, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
         comps = [stats[i] for i in range(1, n)
                  if stats[i][cv2.CC_STAT_AREA] >= 12 and stats[i][cv2.CC_STAT_WIDTH] >= 4]
@@ -334,11 +338,11 @@ class DigitReader:
                 best, best_score = digit, s
         return best, best_score
 
-    def read(self, frame, region, min_score=0.6, min_level=None):
+    def read(self, frame, region, min_score=0.6, min_level=None, yellow=False):
         """The number in `region`, or None if it could not be read confidently."""
         if not self.ready:
             raise RuntimeError("Digit images missing in assets/digits")
-        found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level)]
+        found = [self.classify(g) for g, _ in self.glyphs(frame, region, min_level, yellow)]
         # a weak glyph at either end is usually a speck of background: drop it
         while found and found[0][1] < min_score:
             found.pop(0)
@@ -359,6 +363,7 @@ class TextReader:
 
     def __init__(self):
         self._engine = None
+        self._det = None                                # boxes() only: no upscaling of small areas
         self._lock = threading.Lock()
 
     def _get(self):
@@ -373,7 +378,7 @@ class TextReader:
         if area.shape[0] < 8 or area.shape[1] < 8:
             return []
         with self._lock:
-            result, _ = self._get()(area)
+            result, _ = self._get()(area, use_cls=False)    # (game text is never upside down: no angle step)
         out = []
         for pts, text, conf in result or []:
             xs = [p[0] for p in pts]
@@ -381,6 +386,24 @@ class TextReader:
             x, y = int(min(xs)) + ox, int(min(ys)) + oy
             out.append((text, float(conf), (x, y, int(max(xs) - min(xs)), int(max(ys) - min(ys)))))
         return out
+
+    def boxes(self, frame, region=None):
+        """Where the text in `region` is, without reading it (detection only: about 5x faster than read()).
+        Returns [(x, y, w, h)] in game space, top to bottom."""
+        area, ox, oy = _crop(frame, region)
+        if area.shape[0] < 8 or area.shape[1] < 8:
+            return []
+        with self._lock:
+            if self._det is None:                       # its own engine: the default one first scales a small
+                from rapidocr_onnxruntime import RapidOCR   # area up to 736 px (x3.5 for the loot panel: 1.7 s)
+                self._det = RapidOCR(det_limit_side_len=960, det_limit_type="max")
+            result, _ = self._det(area, use_cls=False, use_rec=False)
+        out = []
+        for pts in result or []:
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            out.append((int(min(xs)) + ox, int(min(ys)) + oy, int(max(xs) - min(xs)), int(max(ys) - min(ys))))
+        return sorted(out, key=lambda b: (b[1], b[0]))
 
     def read_line(self, frame, region):
         """Read a single known line of text (no detection step: faster)."""

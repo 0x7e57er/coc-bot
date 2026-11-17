@@ -543,6 +543,70 @@ def _results(frame):
                for k in ("results/return_home", "results/claim_reward"))
 
 
+LOOT_PANEL = (40, 70, 320, 210)     # "Available Loot" at the top left while scouting and in battle (game space)
+LOOT_LEFT = 125                    # its numbers start left of this (the event's "2x" after them starts far right)
+LOOT_ICON = 22                     # a row's resource icon is this far left of its number
+
+
+def _loot_icon(frame, x, y):
+    """The resource of a loot row's icon around (x, y): gold (yellow), elixir (pink), dark (dark); None if unsure."""
+    patch = frame[max(0, y - 5):y + 6, max(0, x - 5):x + 6]
+    if not patch.size:
+        return None
+    hue, sat, val = (float(v) for v in cv2.cvtColor(patch, cv2.COLOR_BGR2HSV).reshape(-1, 3).mean(0))
+    if 15 <= hue <= 35 and sat > 120 and val > 150:
+        return "gold"
+    if 135 <= hue <= 175 and sat > 80:
+        return "elixir"
+    b, g, r = (float(v) for v in patch.reshape(-1, 3).mean(0))
+    if val < 140 and b > g + 5 and r > g + 5:        # dark purple (a dark green background is not)
+        return "dark"
+    return None
+
+
+def enemy_loot(frame, regions=None):
+    """{gold, elixir, dark} the base offers ("Available Loot", top left, while scouting and in battle; None where
+    unread), and "multiplier" (2 in a loot event, else 1). The rows are found where they are, not in fixed boxes:
+    in a loot event (November 2026) the panel says "Loot Available 2x:" with a 2x icon after every number, and
+    fixed boxes read the icon too. Each text box at the panel's left edge is read as digits, and the colour of the
+    icon left of it says which resource it is. `regions` ({resource: box}): the fixed boxes, tried when nothing is
+    found."""
+    out = {"gold": None, "elixir": None, "dark": None}
+    rows, mult = [], 1
+    boxes = vision.text_reader.boxes(frame, LOOT_PANEL)
+    numbers = [b for b in boxes if b[0] < LOOT_PANEL[0] + LOOT_LEFT]      # (and the title: it reads as no number)
+    after = [b for b in boxes if b[0] >= LOOT_PANEL[0] + LOOT_LEFT]
+    if after:                                       # the event's "2x" after the numbers: one is read
+        bx, by, bw, bh = after[0]
+        text, _ = vision.text_reader.read_line(frame, (bx - 3, by - 3, bw + 6, bh + 6))
+        m = re.search(r"(\d)\s*[x×]", text.lower())
+        mult = int(m.group(1)) if m else 2
+    start = min((b[0] for b in numbers), default=0) - 3     # every row from the column's left edge: a thin
+    for bx, by, bw, bh in numbers:                          # leading "1" is sometimes left out of its box
+        box = (start, by - 3, bx + bw + 3 - start, bh + 6)
+        v = vision.digits.read(frame, box, yellow=bool(after))     # a loot event draws them yellow
+        if v is None:
+            v = vision.digits.read(frame, box, yellow=not after)
+        if v is not None:
+            rows.append((by, _loot_icon(frame, start + 3 - LOOT_ICON, by + bh // 2), v))
+    if any(res for _, res, _ in rows):
+        rows = [row for row in rows if row[1]]          # a row without a resource icon is the title ("... 0")
+    rows = sorted(rows)[-3:]                            # (the title is always above the three rows)
+    free = [r for r in out if r not in {res for _, res, _ in rows}]
+    for _, res, v in sorted(rows):
+        if res is None or out.get(res) is not None:
+            if not free:
+                continue
+            res = free[0]                               # unsure icon: the rows are gold, elixir, dark in order
+        out[res] = v
+        if res in free:
+            free.remove(res)
+    if not rows and regions:
+        out = {r: vision.digits.read(frame, box) for r, box in regions.items()}
+    out["multiplier"] = mult
+    return out
+
+
 def finish_battle(bot, seconds, started=None, stall=0, watch=("gold", "elixir", "dark")):
     """The battle lasts at most `seconds` from `started` (when the attack began; default now), and - with
     `stall` - ends as soon as none of the loot left in the base ("Available Loot", top left: gold, elixir and
@@ -557,8 +621,9 @@ def finish_battle(bot, seconds, started=None, stall=0, watch=("gold", "elixir", 
         if _results(frame):
             return True
         if stall:
+            now = enemy_loot(frame, {r: bot.layout.region(f"scout.{r}") for r in watch})
             for r in watch:
-                v = vision.digits.read(frame, bot.layout.region(f"scout.{r}"))
+                v = now.get(r)
                 if v is None:
                     continue                  # (unread this time: the others still count)
                 if r in left and v < left[r]:
