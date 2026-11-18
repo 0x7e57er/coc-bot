@@ -1,0 +1,56 @@
+name: Build Windows executable
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build GUI executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name COC-Bot --add-data "assets;assets" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
+
+      - name: Package portable folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/COC-Bot/config | Out-Null
+          Copy-Item config/attack_plans.json dist/COC-Bot/config/
+          Copy-Item README.md dist/COC-Bot/
+          Copy-Item dist/COC-Bot.exe dist/COC-Bot/
+          Compress-Archive -Path dist/COC-Bot -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: COC-Bot-Windows-x64
+          path: dist/COC-Bot-Windows-x64.zip
+          if-no-files-found: error
+
+      - name: Publish release asset for version tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/COC-Bot-Windows-x64.zip

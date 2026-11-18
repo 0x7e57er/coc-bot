@@ -1248,7 +1248,11 @@ class Window(QMainWindow):
         self._show_learned()
 
         g = section("Device", "monitor", right)
-        row(g, "BlueStacks instance", "Empty = the main instance (clones are Pie64_1 ...)",
+        row(g, "Device backend", "Google Play Games supports an unminimized window behind other apps; BlueStacks uses the desktop.",
+            combo("device_backend", [("BlueStacks 5", "bluestacks"),
+                                     ("Google Play Games for PC", "google_play_games")],
+                  s["device"].get("backend", "bluestacks"), width=260))
+        row(g, "BlueStacks instance", "Used only with the BlueStacks backend. Empty = the main instance.",
             edit("bluestacks_instance", s["device"].get("bluestacks_instance", ""), "main instance"))
         row(g, "Screenshots of problems", "Saved in logs/errors", check("save_error_screenshots",
                                                                         s.get("save_error_screenshots", True)))
@@ -1541,6 +1545,7 @@ class Window(QMainWindow):
         s["when_done"] = f["when_done"].currentData()
         s["another_device_wait"] = f["another_device_wait"].value()
         s["save_error_screenshots"] = f["save_error_screenshots"].isChecked()
+        s["device"]["backend"] = f["device_backend"].currentData()
         s["device"]["bluestacks_instance"] = f["bluestacks_instance"].text().strip()
         lo["watch"] = {r: f[f"watch_{r}"].isChecked() for r in RESOURCES}
         for key in ("full_rule", "min_loot_rule", "attack_plan"):

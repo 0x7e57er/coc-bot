@@ -50,6 +50,23 @@ Then it goes on to the next account. Or:
 4. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
    bot presses Use on the top recipe of the Saved Recipes tab before the first attack on each account.
 
+## Windows executable
+
+You can build a standalone Windows GUI executable in either of these ways:
+
+- **GitHub Actions:** open Actions -> **Build Windows executable** -> Run workflow. Download the
+  `COC-Bot-Windows-x64` artifact from the completed run. The workflow also publishes the ZIP
+  automatically when you push a version tag such as `v1.0.0`.
+- **Locally:** install Python 3.10+ and run `build-windows.bat`. The executable is created at
+  `dist/COC-Bot.exe`.
+
+The portable ZIP contains the executable, `README.md`, and the default attack-plan config.
+Keep your own `config/settings.json` and `config/accounts.json` beside the executable in a
+`config` folder; these files are deliberately not bundled because they contain your local setup
+and account names. BlueStacks 5 must still be installed on the target PC, and ADB must be enabled.
+
+The executable is a Windows x64 GUI build. It does not bundle BlueStacks or Android.
+
 ## Run
 
 Double-click `run.bat` (or `python main.py`). The window opens maximized. It has a sidebar and a
