@@ -619,7 +619,11 @@ def ensure_game(bot, timeout=150.0):
 
 
 def restart_game(bot):
-    """Stop Clash of Clans with ADB and start it again."""
+    """Restart the game where the device backend supports it; GPG PC must be reopened manually."""
+    if getattr(bot.device, "kind", "") == "google_play_games":
+        log.warning("Google Play Games cannot be restarted programmatically. Leaving it open and returning to the village.")
+        ensure_game(bot)
+        return
     log.warning("Restarting Clash of Clans")
     bot.device.close_game()
     control.sleep(8)
