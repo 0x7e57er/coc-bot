@@ -1,6 +1,7 @@
 name: Build Windows executable
 
 on:
+  pull_request:
   workflow_dispatch:
   push:
     tags:
@@ -33,14 +34,24 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --windowed --name COC-Bot --add-data "assets;assets" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
 
+      - name: Verify PyInstaller output
+        shell: pwsh
+        run: |
+          $exe = "dist/COC-Bot/COC-Bot.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Host "Contents of dist:"
+            Get-ChildItem dist -Recurse | Select-Object FullName
+            throw "PyInstaller onedir executable not found at $exe"
+          }
+
       - name: Package portable folder
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist/COC-Bot/config | Out-Null
-          Copy-Item config/attack_plans.json dist/COC-Bot/config/
-          Copy-Item README.md dist/COC-Bot/
-          Copy-Item dist/COC-Bot.exe dist/COC-Bot/
-          Compress-Archive -Path dist/COC-Bot -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
+          $appDir = "dist/COC-Bot"
+          New-Item -ItemType Directory -Force -Path "$appDir/config" | Out-Null
+          Copy-Item config/attack_plans.json "$appDir/config/"
+          Copy-Item README.md "$appDir/"
+          Compress-Archive -Path $appDir -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
