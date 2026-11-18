@@ -269,8 +269,9 @@ class GooglePlayGamesDevice:
         return (p.stdout + p.stderr).decode(errors="replace").strip()
 
     def _connect_adb(self):
-        # Google Play Games exposes a local ADB endpoint when developer options/ADB are enabled.
-        devices = subprocess.run([self.adb, "devices"], capture_output=True, timeout=15,
+        # Google Play Games may expose ADB only after the developer options page has
+        # enabled debugging and its local connection has been authorized.
+        devices = subprocess.run([self.adb, "devices", "-l"], capture_output=True, timeout=15,
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         listing = devices.stdout.decode(errors="replace")
         found = []
@@ -279,9 +280,13 @@ class GooglePlayGamesDevice:
             if len(parts) >= 2 and parts[1] == "device":
                 found.append(parts[0])
         if not found:
-            raise RuntimeError("No authorized Android device found by adb. Enable Google Play Games developer options/ADB and run adb devices.")
-        # Prefer a Google Play Games local endpoint; otherwise use the only/first attached device.
-        self.serial = next((d for d in found if d.startswith("127.0.0.1:") or d.startswith("localhost:")), found[0])
+            raise RuntimeError("No authorized Android device found by adb. Enable Google Play Games developer options/ADB, then run adb devices.")
+        # On a machine with multiple Android emulators, prefer the local Google Play Games
+        # endpoint. Otherwise use the only available device rather than assuming a fixed port.
+        local = [d for d in found if d.startswith(("127.0.0.1:", "localhost:"))]
+        if len(found) > 1 and not local:
+            raise RuntimeError("More than one ADB device is connected and none has a localhost endpoint. Disconnect other devices or configure Google Play Games ADB.")
+        self.serial = local[0] if local else found[0]
         log.info("Google Play Games ADB device: %s", self.serial)
 
     def find_window(self):
