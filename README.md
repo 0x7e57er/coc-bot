@@ -1,6 +1,6 @@
 # COC bot: loot, upgrade, raid and donate with all accounts
 
-A small Clash of Clans bot for **BlueStacks 5**, written in Python like Coc-Bot. It opens each of your
+A small Clash of Clans bot for **BlueStacks 5** and **Google Play Games for PC**, written in Python. It opens each of your
 accounts in turn and either:
 
 - **Loot**: loots it until its storages are full;
@@ -15,22 +15,28 @@ Then it goes on to the next account. Or:
 - **Loot + donate**: your accounts request troops and your main account donates to them, paying with
   elixir; when the main account's elixir runs low it loots, and your partner account loots with it.
 
-- **ADB** is used only to start and stop Clash of Clans (and to see whether it runs).
-- Everything else uses the **screen itself**. The bot takes a screenshot, finds the game's buttons,
-  numbers and buildings on it as images, and clicks those spots with the mouse.
-- The bot works at your **PC's current screen resolution**. BlueStacks runs full screen, and the bot
-  scales whatever size the screen is.
+- **BlueStacks 5:** ADB starts/stops Clash of Clans; desktop screenshots and mouse input drive the bot.
+- **Google Play Games for PC:** the bot captures the game's `CROSVM` window surface and sends mouse
+  messages directly to that window. The game window may sit behind other apps, but must not be minimized.
+  This mode does not require ADB.
+- The bot scales screenshots into its game coordinate space; BlueStacks remains full-screen while
+  Google Play Games can run in a normal window.
 
 ## Setup (once)
 
 1. Install Python 3.10+ (tick "Add python.exe to PATH") and run `setup.bat`.
-2. In BlueStacks 5 settings:
+2. In **Loot settings → Device**, choose the backend you use:
+   - **Google Play Games for PC:** open Clash of Clans first. Keep its window open and unminimized; it may sit
+     behind other applications. No ADB setup is needed. The bot currently does not launch/restart/close the
+     consumer Google Play Games client, so open the game yourself before pressing Start.
+   - **BlueStacks 5:** continue with the BlueStacks settings below; ADB must be enabled.
+3. In BlueStacks 5 settings:
    - **Advanced > Android Debug Bridge**: on.
    - **Display**: set the resolution to the same size as your Windows screen (for example
      1920×1080), so BlueStacks full screen fills the screen with no black bars.
    - Keep BlueStacks' **game controls** for Clash of Clans. The Down arrow is its zoom-out key, and
      the bot uses it.
-3. Put your accounts in `config/accounts.json`, in the **same order as the game's Supercell ID list**:
+4. Put your accounts in `config/accounts.json`, in the **same order as the game's Supercell ID list**:
 
    ```json
    [
@@ -47,7 +53,7 @@ Then it goes on to the next account. Or:
    - Optional `"full_at": {"elixir": 20000000}`: this account's own full amount, which overrides the
      table.
 
-4. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
+5. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
    bot presses Use on the top recipe of the Saved Recipes tab before the first attack on each account.
 
 ## Windows executable
@@ -55,15 +61,17 @@ Then it goes on to the next account. Or:
 You can build a standalone Windows GUI executable in either of these ways:
 
 - **GitHub Actions:** open Actions -> **Build Windows executable** -> Run workflow. Download the
-  `COC-Bot-Windows-x64` artifact from the completed run. The workflow also publishes the ZIP
-  automatically when you push a version tag such as `v1.0.0`.
+  `COC-Bot-Windows-x64` artifact from the completed run. Extract it once to get the app folder
+  (the executable, `_internal` runtime folder, and config). The workflow publishes a single ZIP
+  on version tags such as `v1.0.0`.
 - **Locally:** install Python 3.10+ and run `build-windows.bat`. The executable is created at
   `dist/COC-Bot/COC-Bot.exe` (the adjacent `_internal` folder is required).
 
-The portable ZIP contains the executable, its PyInstaller runtime files, `README.md`, and the default
-attack-plan config. Keep your own `config/settings.json` and `config/accounts.json` in the
-`config` folder beside `COC-Bot.exe`; these files are deliberately not bundled because they contain your local setup
-and account names. BlueStacks 5 must still be installed on the target PC, and ADB must be enabled.
+The portable app folder contains the executable, its PyInstaller runtime files, `README.md`, and the
+default attack-plan config. Keep your own `config/settings.json` and `config/accounts.json` in the
+`config` folder beside `COC-Bot.exe`; these files are deliberately not bundled because they contain
+your local setup and account names. Install the selected emulator on the target PC. ADB is required
+only for BlueStacks 5, not Google Play Games for PC.
 
 The executable is a Windows x64 GUI build. It does not bundle BlueStacks or Android.
 

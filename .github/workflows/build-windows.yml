@@ -44,21 +44,29 @@ jobs:
             throw "PyInstaller onedir executable not found at $exe"
           }
 
-      - name: Package portable folder
+      - name: Prepare portable folder
         shell: pwsh
         run: |
           $appDir = "dist/COC-Bot"
           New-Item -ItemType Directory -Force -Path "$appDir/config" | Out-Null
           Copy-Item config/attack_plans.json "$appDir/config/"
           Copy-Item README.md "$appDir/"
-          Compress-Archive -Path $appDir -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
 
+      # Actions artifacts are already downloaded as a ZIP. Upload the folder itself,
+      # not a ZIP inside that ZIP, so users only extract once.
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: COC-Bot-Windows-x64
-          path: dist/COC-Bot-Windows-x64.zip
+          path: dist/COC-Bot/
           if-no-files-found: error
+
+      # GitHub Releases need a single downloadable archive; create it only for tags.
+      - name: Create release ZIP
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/COC-Bot -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
 
       - name: Publish release asset for version tags
         if: startsWith(github.ref, 'refs/tags/')

@@ -275,11 +275,17 @@ def after_run(bot, what):
         return
     log.info("All accounts done - %s", AFTER_RUN[what])
     try:
-        bot.device.close_game()
-        log.info("Clash of Clans closed")
+        game_closed = bot.device.close_game()
+        if game_closed is False:
+            log.info("Clash of Clans left open (this device backend cannot close it safely)")
+        else:
+            log.info("Clash of Clans closed")
         if what in ("close_bluestacks", "close_all", "shutdown"):
-            bot.device.close_bluestacks()
-            log.info("BlueStacks closed")
+            emulator_closed = bot.device.close_bluestacks()
+            if emulator_closed is False:
+                log.info("Emulator left open (this device backend does not manage the emulator process)")
+            else:
+                log.info("Emulator closed")
     except Exception:  # noqa: BLE001 - the PC is still locked / shut down
         log.exception("Closing the game / BlueStacks failed")
     if what == "lock":
@@ -303,7 +309,10 @@ def restart_only(settings, accounts):
 
 
 def close_bluestacks_only(settings, accounts):
-    """The Close BlueStacks button (BlueStacks is not started for it)."""
+    """The Close emulator button (BlueStacks is not started for it)."""
+    if settings.get("device", {}).get("backend", "bluestacks") == "google_play_games":
+        log.info("Google Play Games is left open; this button only applies to BlueStacks.")
+        return
     from .device import BlueStacks, close_bluestacks
     bs = BlueStacks.find()
     if not bs:
