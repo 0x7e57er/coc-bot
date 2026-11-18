@@ -14,7 +14,7 @@ from . import account as account_actions
 from . import config, donate, loot, net, raid, upgrade, vision, walls
 from .context import Bot, BotError
 from .control import BotStopped, Stuck, control, is_user_abort
-from .device import BlueStacksDevice
+from .device import BlueStacksDevice, GooglePlayGamesDevice
 from .states import ensure_game, go_home, restart_game
 
 log = logging.getLogger("bot")
@@ -51,7 +51,13 @@ def make_bot(settings, accounts):
     if not vision.digits.ready:
         raise RuntimeError("Digit images are missing in assets/digits")
     d = settings["device"]
-    device = BlueStacksDevice(d.get("bluestacks_instance", ""), d.get("adb_path", ""))
+    backend = d.get("backend", "bluestacks")
+    if backend == "google_play_games":
+        device = GooglePlayGamesDevice(adb_path=d.get("adb_path", ""))
+    elif backend == "bluestacks":
+        device = BlueStacksDevice(d.get("bluestacks_instance", ""), d.get("adb_path", ""))
+    else:
+        raise RuntimeError(f"Unknown device backend: {backend}")
     bot = Bot(device, settings, accounts)
     bot.state = config.load_state()
     return bot
