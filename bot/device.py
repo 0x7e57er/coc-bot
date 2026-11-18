@@ -158,6 +158,288 @@ def close_bluestacks(title):
     return bool(found)
 
 
+class GooglePlayGamesDevice:
+    """Google Play Games for PC, using a window-scoped capture and input backend.
+
+    The game window must remain visible/unminimized. It may be behind other windows.
+    Capture uses PrintWindow on the CROSVM render surface; mouse input is posted to
+    that surface. This is intentionally separate from the legacy BlueStacks backend.
+    """
+
+    kind = "google_play_games"
+    BOOT_SECONDS = 150
+    ui_scale = 1.0
+    field_scale = 1.0
+    windows = ((1.0, 0),)
+
+    WM_MOUSEMOVE = 0x0200
+    WM_LBUTTONDOWN = 0x0201
+    WM_LBUTTONUP = 0x0202
+    WM_MOUSEWHEEL = 0x020A
+    WM_KEYDOWN = 0x0100
+    WM_KEYUP = 0x0101
+    MK_LBUTTON = 0x0001
+    VK_DOWN = 0x28
+
+    def __init__(self, instance="", adb_path="", package=COC_PACKAGE):
+        import ctypes
+        from ctypes import wintypes
+        import win32process
+
+        self._ctypes = ctypes
+        self._wintypes = wintypes
+        self._win32process = win32process
+        self._native = None
+        self._hwnd = 0
+        self._top_hwnd = 0
+        self._title = ""
+        self._class = ""
+        self._gdi32 = ctypes.windll.gdi32
+        self._user32 = ctypes.windll.user32
+        self.bs = None
+        self.adb = find_adb(adb_path) or shutil.which("adb")
+        if not self.adb:
+            raise RuntimeError("Google Play Games mode requires adb.exe. Install Android platform-tools or set device.adb_path.")
+        self.package = package
+        self.serial = "emulator-5554"
+        self._resolve_window()
+        self._connect_adb()
+
+    def describe(self):
+        return f"Google Play Games ({self._title or self._class})"
+
+    def _get_class(self, hwnd):
+        buf = self._ctypes.create_unicode_buffer(256)
+        self._user32.GetClassNameW(hwnd, buf, 256)
+        return buf.value
+
+    def _get_title(self, hwnd):
+        n = self._user32.GetWindowTextLengthW(hwnd)
+        if n <= 0:
+            return ""
+        buf = self._ctypes.create_unicode_buffer(n + 1)
+        self._user32.GetWindowTextW(hwnd, buf, n + 1)
+        return buf.value
+
+    def _find_surface(self, root):
+        matches = []
+        proc_type = self._ctypes.WINFUNCTYPE(self._ctypes.c_bool, self._wintypes.HWND, self._wintypes.LPARAM)
+
+        def cb(hwnd, _):
+            cls = self._get_class(hwnd)
+            if cls.upper().startswith("CROSVM"):
+                matches.append((hwnd, cls))
+                return False
+            return True
+
+        self._user32.EnumChildWindows(root, proc_type(cb), 0)
+        return matches[0] if matches else (0, "")
+
+    def _resolve_window(self):
+        candidates = []
+        proc_type = self._ctypes.WINFUNCTYPE(self._ctypes.c_bool, self._wintypes.HWND, self._wintypes.LPARAM)
+
+        def cb(hwnd, _):
+            if not self._user32.IsWindowVisible(hwnd):
+                return True
+            title = self._get_title(hwnd)
+            if "clash of clans" not in title.lower():
+                return True
+            cls = self._get_class(hwnd)
+            child, child_cls = self._find_surface(hwnd)
+            if child:
+                candidates.append((hwnd, title, child, child_cls))
+            elif cls.upper().startswith("CROSVM"):
+                candidates.append((hwnd, title, hwnd, cls))
+            return True
+
+        self._user32.EnumWindows(proc_type(cb), 0)
+        if not candidates:
+            raise RuntimeError("Google Play Games game surface not found. Open Clash of Clans and keep its window unminimized.")
+        self._top_hwnd, self._title, self._hwnd, self._class = candidates[0]
+        if self._user32.IsIconic(self._top_hwnd) or self._user32.IsIconic(self._hwnd):
+            raise RuntimeError("Google Play Games is minimized. Restore it; it may remain behind other windows.")
+
+    def _run_adb(self, *args, timeout=15):
+        try:
+            p = subprocess.run([self.adb, "-s", self.serial, *args], capture_output=True, timeout=timeout,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except (subprocess.TimeoutExpired, OSError):
+            return ""
+        return (p.stdout + p.stderr).decode(errors="replace").strip()
+
+    def _connect_adb(self):
+        # Google Play Games exposes a local ADB endpoint when developer options/ADB are enabled.
+        devices = subprocess.run([self.adb, "devices"], capture_output=True, timeout=15,
+                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        listing = devices.stdout.decode(errors="replace")
+        found = []
+        for line in listing.splitlines()[1:]:
+            parts = line.split()
+            if len(parts) >= 2 and parts[1] == "device":
+                found.append(parts[0])
+        if not found:
+            raise RuntimeError("No authorized Android device found by adb. Enable Google Play Games developer options/ADB and run adb devices.")
+        # Prefer a Google Play Games local endpoint; otherwise use the only/first attached device.
+        self.serial = next((d for d in found if d.startswith("127.0.0.1:") or d.startswith("localhost:")), found[0])
+        log.info("Google Play Games ADB device: %s", self.serial)
+
+    def find_window(self):
+        if self._hwnd and self._user32.IsWindow(self._hwnd):
+            return self._hwnd
+        self._resolve_window()
+        return self._hwnd
+
+    def _window_rect(self):
+        rect = self._wintypes.RECT()
+        if not self._user32.GetWindowRect(self.find_window(), self._ctypes.byref(rect)):
+            raise RuntimeError("Could not read Google Play Games surface bounds")
+        w, h = rect.right - rect.left, rect.bottom - rect.top
+        if w <= 0 or h <= 0:
+            raise RuntimeError("Google Play Games surface has invalid dimensions")
+        return rect.left, rect.top, w, h
+
+    def connect(self):
+        self._resolve_window()
+        self._connect_adb()
+        log.info("Using %s, window-scoped capture/input (unminimized background supported)", self.describe())
+
+    def is_full_screen(self):
+        return True
+
+    def full_screen(self):
+        # Google Play Games does not need to be full-screen for this backend.
+        self.find_window()
+
+    def prepare(self):
+        """Refresh the HWND and refuse minimized surfaces, but never activate the game."""
+        hwnd = self.find_window()
+        if self._user32.IsIconic(self._top_hwnd) or self._user32.IsIconic(hwnd):
+            raise RuntimeError("Google Play Games is minimized; restore it (occlusion is supported, minimization is not).")
+
+    def is_game_running(self):
+        result = self._run_adb("shell", "pidof", self.package)
+        return bool(result)
+
+    def launch_game(self):
+        result = self._run_adb("shell", "monkey", "-p", self.package, "-c", "android.intent.category.LAUNCHER", "1")
+        log.info("Launch game requested through ADB: %s", result)
+
+    def close_game(self):
+        self._run_adb("shell", "am", "force-stop", self.package)
+
+    def close_bluestacks(self):
+        raise RuntimeError("Close Google Play Games from its own window; this backend does not terminate emulator processes.")
+
+    def tidy_up(self):
+        self.prepare()
+
+    @staticmethod
+    def _make_lparam(x, y):
+        return ((int(y) & 0xFFFF) << 16) | (int(x) & 0xFFFF)
+
+    def _post(self, msg, wparam=0, lparam=0):
+        self.prepare()
+        self._user32.PostMessageW(self.find_window(), msg, wparam, lparam)
+
+    def _capture_native(self):
+        from PIL import Image
+        self.prepare()
+        _, _, width, height = self._window_rect()
+        hwnd = self.find_window()
+        hwnd_dc = self._user32.GetWindowDC(hwnd)
+        mem_dc = self._gdi32.CreateCompatibleDC(hwnd_dc)
+        bitmap = self._gdi32.CreateCompatibleBitmap(hwnd_dc, width, height)
+        old_obj = self._gdi32.SelectObject(mem_dc, bitmap)
+        try:
+            self._user32.PrintWindow(hwnd, mem_dc, 2)  # PW_RENDERFULLCONTENT
+            class BITMAPINFOHEADER(self._ctypes.Structure):
+                _fields_ = [
+                    ("biSize", self._wintypes.DWORD), ("biWidth", self._ctypes.c_long),
+                    ("biHeight", self._ctypes.c_long), ("biPlanes", self._wintypes.WORD),
+                    ("biBitCount", self._wintypes.WORD), ("biCompression", self._wintypes.DWORD),
+                    ("biSizeImage", self._wintypes.DWORD), ("biXPelsPerMeter", self._ctypes.c_long),
+                    ("biYPelsPerMeter", self._ctypes.c_long), ("biClrUsed", self._wintypes.DWORD),
+                    ("biClrImportant", self._wintypes.DWORD),
+                ]
+            bmi = BITMAPINFOHEADER()
+            bmi.biSize = self._ctypes.sizeof(BITMAPINFOHEADER)
+            bmi.biWidth, bmi.biHeight = width, -height
+            bmi.biPlanes, bmi.biBitCount, bmi.biCompression = 1, 32, 0
+            buf = (self._ctypes.c_ubyte * (width * height * 4))()
+            rows = self._gdi32.GetDIBits(mem_dc, bitmap, 0, height, self._ctypes.byref(buf),
+                                         self._ctypes.byref(bmi), 0)
+            if rows != height:
+                raise RuntimeError("PrintWindow capture did not return a complete frame")
+            image = Image.frombuffer("RGBA", (width, height), bytes(buf), "raw", "BGRA", 0, 1)
+            return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGBA2BGR)
+        finally:
+            self._gdi32.SelectObject(mem_dc, old_obj)
+            self._gdi32.DeleteObject(bitmap)
+            self._gdi32.DeleteDC(mem_dc)
+            self._user32.ReleaseDC(hwnd, hwnd_dc)
+
+    def capture(self):
+        frame = self._capture_native()
+        h, w = frame.shape[:2]
+        self._native = (w, h)
+        gw, gh = space.update(w, h, self.ui_scale, self.field_scale, self.windows)
+        if (w, h) != (gw, gh):
+            frame = cv2.resize(frame, (gw, gh), interpolation=cv2.INTER_AREA if w > gw else cv2.INTER_LINEAR)
+        return frame
+
+    def to_native(self, x, y):
+        if self._native is None:
+            self.capture()
+        return round(x * space.scale), round(y * space.scale)
+
+    def _tap(self, x, y, down=True):
+        px, py = self.to_native(x, y)
+        self._post(self.WM_LBUTTONDOWN if down else self.WM_LBUTTONUP,
+                   self.MK_LBUTTON if down else 0, self._make_lparam(px, py))
+
+    def tap(self, x, y):
+        self._tap(x, y, True)
+        self._tap(x, y, False)
+
+    def tap_burst(self, x, y, n, interval=0.05):
+        px, py = self.to_native(x, y)
+        for i in range(n):
+            if i:
+                control.sleep(interval)
+            self._post(self.WM_LBUTTONDOWN, self.MK_LBUTTON, self._make_lparam(px, py))
+            self._post(self.WM_LBUTTONUP, 0, self._make_lparam(px, py))
+
+    def _move(self, x, y, buttons=0):
+        px, py = self.to_native(x, y)
+        self._post(self.WM_MOUSEMOVE, buttons, self._make_lparam(px, py))
+
+    def swipe(self, x1, y1, x2, y2, ms=500):
+        self._move(x1, y1)
+        self._tap(x1, y1, True)
+        steps = max(2, int(ms / 16))
+        for i in range(1, steps + 1):
+            t = i / steps
+            self._move(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, self.MK_LBUTTON)
+            time.sleep(ms / steps / 1000)
+        self._tap(x2, y2, False)
+
+    def drag(self, x1, y1, x2, y2, ms=500):
+        self.swipe(x1, y1, x2, y2, ms)
+
+    def zoom_out(self, presses=2):
+        # BasePilot does not use the desktop keyboard for game input; mouse wheel is window-directed.
+        for _ in range(presses):
+            self._post(self.WM_MOUSEWHEEL, ((-120 & 0xFFFF) << 16), 0)
+            time.sleep(0.4)
+
+    def key_down(self, vk):
+        self._post(self.WM_KEYDOWN, vk, 0)
+
+    def key_up(self, vk):
+        self._post(self.WM_KEYUP, vk, 0)
+
+
 class BlueStacksDevice:
     """BlueStacks 5 on this PC, always full screen and in front. The bot takes a picture of the screen
     itself, finds the images on it and clicks those screen pixels with the mouse. ADB only starts and
