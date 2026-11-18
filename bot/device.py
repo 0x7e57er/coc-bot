@@ -355,9 +355,10 @@ class GooglePlayGamesDevice:
             raise RuntimeError("Could not allocate a Google Play Games screenshot")
         old_obj = self._gdi32.SelectObject(mem_dc, bitmap)
         try:
-            rendered = self._user32.PrintWindow(hwnd, mem_dc, 2)  # PW_RENDERFULLCONTENT
-            if not rendered:
-                raise RuntimeError("PrintWindow could not capture the Google Play Games surface")
+            # PW_RENDERFULLCONTENT asks the target to render even when another window
+            # covers it. Some CROSVM builds return 0 despite writing the bitmap, so
+            # validate the pixel read below rather than trusting PrintWindow's BOOL.
+            self._user32.PrintWindow(hwnd, mem_dc, 2)
             class BITMAPINFOHEADER(self._ctypes.Structure):
                 _fields_ = [
                     ("biSize", self._wintypes.DWORD), ("biWidth", self._ctypes.c_long),
@@ -372,6 +373,8 @@ class GooglePlayGamesDevice:
             bmi.biWidth, bmi.biHeight = width, -height
             bmi.biPlanes, bmi.biBitCount, bmi.biCompression = 1, 32, 0
             buf = (self._ctypes.c_ubyte * (width * height * 4))()
+            # GetDIBits requires the bitmap not to be selected into a DC.
+            self._gdi32.SelectObject(mem_dc, old_obj)
             rows = self._gdi32.GetDIBits(mem_dc, bitmap, 0, height, self._ctypes.byref(buf),
                                          self._ctypes.byref(bmi), 0)
             if rows != height:
