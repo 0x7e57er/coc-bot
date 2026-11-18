@@ -49,7 +49,8 @@ DEFAULT_MIN_LOOT = {
 
 DEFAULT_SETTINGS = {
     "device": {
-        "bluestacks_instance": "",          # "" = the main instance (Pie64); clones are Pie64_1 ...
+        "backend": "bluestacks",             # "bluestacks" or "google_play_games"
+        "bluestacks_instance": "",          # "" = the main BlueStacks instance (Pie64); clones are Pie64_1 ...
         "adb_path": "",                     # "" = adb on PATH, else BlueStacks' own HD-Adb.exe
     },
     "mode": "loot",                         # "loot" / "raid" (Clan Capital raids) / "raid_loot" (raids, then loot)
