@@ -58,22 +58,26 @@ Then it goes on to the next account. Or:
 
 ## Windows executable
 
-You can build a standalone Windows GUI executable in either of these ways:
+The Windows build is a **single-file executable**: `COC-Bot.exe`. The Python runtime, libraries,
+game image assets and default attack-plan presets are bundled inside it. There is no `_internal`
+folder and no separate runtime files to keep beside the executable.
 
 - **GitHub Actions:** open Actions -> **Build Windows executable** -> Run workflow. Download the
-  `COC-Bot-Windows-x64` artifact from the completed run. Extract it once to get the app folder
-  (the executable, `_internal` runtime folder, and config). The workflow publishes a single ZIP
-  on version tags such as `v1.0.0`.
-- **Locally:** install Python 3.10+ and run `build-windows.bat`. The executable is created at
-  `dist/COC-Bot/COC-Bot.exe` (the adjacent `_internal` folder is required).
+  `COC-Bot-Windows-x64` artifact and extract it once; the extracted contents are just
+  `COC-Bot.exe`. Version tags such as `v1.0.0` publish the EXE itself as a release asset.
+- **Locally:** install Python 3.10+ and run `build-windows.bat`. The single executable is created at
+  `dist/COC-Bot.exe`.
 
-The portable app folder contains the executable, its PyInstaller runtime files, `README.md`, and the
-default attack-plan config. Keep your own `config/settings.json` and `config/accounts.json` in the
-`config` folder beside `COC-Bot.exe`; these files are deliberately not bundled because they contain
-your local setup and account names. Install the selected emulator on the target PC. ADB is required
-only for BlueStacks 5, not Google Play Games for PC.
+On first launch, the app creates writable `config` and `logs` folders beside the EXE. The default
+attack-plan presets are copied into `config/attack_plans.json` automatically. Put your own
+`config/accounts.json` there (or add accounts in the app) and save settings as usual. Keep those
+folders if you want to preserve your setup and logs; they are runtime data, not extra files required
+to launch the EXE.
 
-The executable is a Windows x64 GUI build. It does not bundle BlueStacks or Android.
+The executable is a Windows x64 GUI build. It does not bundle BlueStacks or Android. One-file builds
+take a little longer to start because Windows unpacks the bundled runtime into a temporary folder.
+Install the selected emulator on the target PC. ADB is required only for BlueStacks 5, not Google Play
+Games for PC.
 
 ## Run
 
