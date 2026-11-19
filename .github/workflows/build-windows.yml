@@ -8,7 +8,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -29,47 +29,33 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
 
-      - name: Build GUI executable
+      - name: Build single-file GUI executable
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --name COC-Bot --add-data "assets;assets" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name COC-Bot --add-data "assets;assets" --add-data "config/attack_plans.json;config" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
 
-      - name: Verify PyInstaller output
+      - name: Verify single-file output
         shell: pwsh
         run: |
-          $exe = "dist/COC-Bot/COC-Bot.exe"
+          $exe = "dist/COC-Bot.exe"
           if (-not (Test-Path $exe)) {
             Write-Host "Contents of dist:"
             Get-ChildItem dist -Recurse | Select-Object FullName
-            throw "PyInstaller onedir executable not found at $exe"
+            throw "PyInstaller one-file executable not found at $exe"
           }
 
-      - name: Prepare portable folder
-        shell: pwsh
-        run: |
-          $appDir = "dist/COC-Bot"
-          New-Item -ItemType Directory -Force -Path "$appDir/config" | Out-Null
-          Copy-Item config/attack_plans.json "$appDir/config/"
-          Copy-Item README.md "$appDir/"
-
-      # Actions artifacts are already downloaded as a ZIP. Upload the folder itself,
-      # not a ZIP inside that ZIP, so users only extract once.
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      # v7 supports a raw single-file artifact. archive:false means the browser download
+      # is the EXE itself, not a ZIP containing it.
+      - name: Upload executable
+        uses: actions/upload-artifact@v7
         with:
-          name: COC-Bot-Windows-x64
-          path: dist/COC-Bot/
+          path: dist/COC-Bot.exe
+          archive: false
           if-no-files-found: error
 
-      # GitHub Releases need a single downloadable archive; create it only for tags.
-      - name: Create release ZIP
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        run: |
-          Compress-Archive -Path dist/COC-Bot -DestinationPath dist/COC-Bot-Windows-x64.zip -Force
-
+      # Version releases also attach the EXE directly.
       - name: Publish release asset for version tags
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/COC-Bot-Windows-x64.zip
+          files: dist/COC-Bot.exe
