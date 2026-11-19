@@ -14,20 +14,20 @@ if errorlevel 1 goto :error
 py -3 -m pip install -r requirements.txt pyinstaller
 if errorlevel 1 goto :error
 
-py -3 -m PyInstaller --noconfirm --clean --windowed --name COC-Bot --add-data "assets;assets" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
+rem Remove the old onedir output from earlier builds.
+if exist "dist\COC-Bot" rmdir /s /q "dist\COC-Bot"
+
+py -3 -m PyInstaller --noconfirm --clean --onefile --windowed --name COC-Bot --add-data "assets;assets" --add-data "config\attack_plans.json;config" --collect-all PySide6 --collect-all cv2 --collect-all rapidocr_onnxruntime main.py
 if errorlevel 1 goto :error
 
-if not exist "dist\COC-Bot\COC-Bot.exe" (
-  echo PyInstaller did not create dist\COC-Bot\COC-Bot.exe
+if not exist "dist\COC-Bot.exe" (
+  echo PyInstaller did not create dist\COC-Bot.exe
   goto :error
 )
 
-if not exist "dist\COC-Bot\config" mkdir "dist\COC-Bot\config"
-copy /Y "config\attack_plans.json" "dist\COC-Bot\config\" >nul
-copy /Y "README.md" "dist\COC-Bot\" >nul
 echo.
-echo Build complete: %CD%\dist\COC-Bot\COC-Bot.exe
-echo Keep the config folder next to the executable when distributing.
+echo Build complete: %CD%\dist\COC-Bot.exe
+echo This is a single EXE. The config and logs folders are created beside it on first run.
 pause
 exit /b 0
 
