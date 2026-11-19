@@ -195,33 +195,30 @@ def _label(frame, cx):
 def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
     """Drop every unit on the card at cx, checking that each tap really deployed one.
 
-    Units with a count (x15) are tracked by the count; a hero, a siege machine or
-    anything without a readable count is one unit, confirmed by its card changing.
-    A tap that did nothing (red area / outside the map) moves that spot and retries.
-    Stops as soon as the card is empty, so the game never auto-selects the next unit
-    under our taps.
+    Returns True only when the card was observed to change / empty, False if no deployment
+    could be confirmed. Counted troop cards are checked by count; single hero/siege cards by
+    their card image changing.
     """
     if not spots:
-        return
+        return False
     fixes = {} if fixes is None else fixes
 
     def fixed(p):
         seen = 0
-        while p is not None and p in fixes and seen < 10:   # corrections learned earlier this attack
+        while p is not None and p in fixes and seen < 10:
             p, seen = fixes[p], seen + 1
         return p
 
     frame = bot.shot()
     wanted = list(spots)
     spots = [p for p in (fixed(p) for p in spots) if p is not None and deployzone.valid_spot(frame, *p)]
-    good = fixes.setdefault("__good__", [])          # spots where a unit was really deployed this attack
+    good = fixes.setdefault("__good__", [])
     if not spots and good:
-        # every planned spot turned out unusable: use the closest spots that worked for others
         ref = wanted[0] if wanted else centre
         spots = sorted(set(good), key=lambda g: (g[0] - ref[0]) ** 2 + (g[1] - ref[1]) ** 2)[:max(1, len(wanted))]
     if not spots:
         log.warning("No usable deploy spots left")
-        return
+        return False
     moves = {}
     count = None if single else read_count(frame, cx)
     by_count = count is not None
@@ -236,30 +233,28 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
         bot.tap(x, y, jitter=3)
         ok = False
         waited = 0.0
-        for pause in (0.08, 0.1, 0.1, 0.12):               # the bar updates ~0.1-0.2 s after a tap
+        for pause in (0.08, 0.1, 0.1, 0.12):
             time.sleep(pause)
             waited += pause
             frame = bot.shot()
             if slot_empty(frame, cx):
                 good.append((x, y))
-                return
+                return True
             if by_count:
                 now = read_count(frame, cx)
                 if now is not None and now < left:
                     left, ok = now, True
                     break
                 if now is None and np.abs(_label(frame, cx) - label0).mean() > 10:
-                    left, ok = left - 1, True              # number changed but not readable
+                    left, ok = left - 1, True
                     break
             elif np.abs(_card(frame, cx) - card0).mean() > 12:
                 good.append((x, y))
-                return                                      # the single unit is on the field
+                return True
         if ok:
             good.append((x, y))
         log.debug("tap %s: %s, %s left (%.2fs)", (x, y), "ok" if ok else "no effect", left, waited)
         if not ok:
-            # illegal spot: inside the red zone -> move it out; beyond the map -> move it in.
-            # A moved spot must still be on the map and off every button, and moves at most 3 times.
             n = moves.get((x, y), 0) + 1
             nx, ny = _nudge((x, y), centre, outward=deployzone.in_diamond(x, y, inset=-deployzone.MAP_GROW))
             if n <= 3 and deployzone.valid_spot(frame, nx, ny):
@@ -270,9 +265,10 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
                 fixes[(x, y)] = None
                 spots = [p for p in spots if p != (x, y)]
             if reselect:
-                reselect()                         # in case a stray tap selected something else
+                reselect()
         if not queue and left > 0:
             queue = [p for p in (fixed(p) for p in _spread(spots, left)) if p is not None]
+    return left <= 0
 
 
 CLONE_IN = 55          # a Clone goes this far inside a dragon group's spot: where the dragons fly to
@@ -346,7 +342,7 @@ def bar_cards(frame, slots):
             scanned.append(f"{cx}: blank")
             continue
         cards.append((cx, n))
-        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)}")
+        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)} (corner_blank={blank}, grey={grey})")
     log.info("Troop bar scan (%d candidate slots): %s", len(slots), ", ".join(scanned) or "none")
     singles_at = [i for i, (_, n) in enumerate(cards) if n is None]
     if singles_at:
@@ -424,7 +420,9 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
     # advances through nearby points on the ring rather than giving up on that hero.
     for i, cx in enumerate(singles):
         control.checkpoint()
-        if slot_empty(bot.shot(), cx):
+        current = bot.shot()
+        if no_card(current, cx) and slot_empty(current, cx):
+            log.debug("Skipping genuinely blank single-card slot at %d", cx)
             continue
         _pick(bot, cx)
         preferred = behind[i % len(behind)]
@@ -433,8 +431,12 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
             (p for p in candidates if p != preferred),
             key=lambda p: (p[0] - preferred[0]) ** 2 + (p[1] - preferred[1]) ** 2,
         )
-        _drop(bot, cx, [preferred] + alternatives, centre, single=True, fixes=fixes,
-              reselect=lambda x=cx: _pick(bot, x))
+        deployed = _drop(bot, cx, [preferred] + alternatives, centre, single=True, fixes=fixes,
+                          reselect=lambda x=cx: _pick(bot, x))
+        if deployed:
+            log.info("Single siege / hero card at %d deployed", cx)
+        else:
+            log.warning("Could not confirm deployment for single siege / hero card at %d", cx)
         time.sleep(0.1)
     log.info("Attempted deployment for %d siege machine / hero card(s) across %d candidate spot(s)",
              len(singles), len(ring or sides))
