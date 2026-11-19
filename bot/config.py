@@ -74,6 +74,7 @@ DEFAULT_SETTINGS = {
         "smart_deploy": True,               # find the red no-deploy area and drop troops just outside it
         "count_troops": True,               # read each troop count and tap exactly that many times
         "attack_plan": "edrag_clone",       # a plan in config/attack_plans.json
+        "auto_4x_speed": True,               # enable 4x once its control appears during an active battle
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
         # the army: before the first attack of each visit, Saved Recipes -> the first recipe (bot/army.py)

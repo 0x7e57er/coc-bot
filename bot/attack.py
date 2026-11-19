@@ -568,25 +568,22 @@ def _find_speed_button(frame, key):
     return match if match.score >= SPEED_BUTTON_THRESHOLD else None
 
 
-def ensure_four_x(bot, timeout=2.5):
-    """Enable 4x battle speed when the battle button is visibly at 1x.
+def ensure_four_x(bot, frame=None, timeout=2.5):
+    """Try to enable 4x when the in-battle speed control is visible.
 
-    Search a range of image scales because BlueStacks / Google Play Games can
-    produce different game-space sizes. Unknown states are left untouched.
+    Returns True if already at 4x / switched successfully, None if the control
+    is not visible yet, and False if a 1x tap was made but could not be verified.
     """
-    speed_1x = "battle/speed_1x"
-    speed_4x = "battle/speed_4x"
-    frame = bot.shot()
-    four = _find_speed_button(frame, speed_4x)
+    frame = bot.shot() if frame is None else frame
+    four = _find_speed_button(frame, "battle/speed_4x")
     if four:
         log.info("Battle speed already at 4x")
         return True
 
-    one = _find_speed_button(frame, speed_1x)
+    one = _find_speed_button(frame, "battle/speed_1x")
     if not one:
-        log.warning("Battle speed button not recognized as 1x or 4x; leaving it unchanged")
-        bot.save_error("speed-button-unrecognized", frame)
-        return False
+        log.debug("4x speed control not visible yet")
+        return None
 
     log.info("Battle speed is 1x; switching to 4x")
     bot.tap_match(one, jitter=0)
@@ -594,17 +591,17 @@ def ensure_four_x(bot, timeout=2.5):
     while time.monotonic() < deadline:
         control.sleep(0.15)
         frame = bot.shot()
-        if _find_speed_button(frame, speed_4x):
+        if _find_speed_button(frame, "battle/speed_4x"):
             log.info("Battle speed switched to 4x (verified)")
             return True
 
-    log.warning("4x speed was not confirmed after the tap; continuing without tapping again")
+    log.warning("4x speed was not confirmed after the tap; will not tap again this battle")
+    bot.save_error("speed-button-unverified", frame)
     return False
 
 def deploy(bot, plan):
-    # Start the battle clock before the speed toggle so its verification time counts too.
+    # Count deployment time too, but speed switching waits until the active battle.
     bot.deploy_started = time.monotonic()
-    ensure_four_x(bot)
 
     s = bot.settings["loot"]
     smart, verify = s.get("smart_deploy", True), s.get("count_troops", True)
@@ -703,10 +700,26 @@ def finish_battle(bot, seconds, started=None, stall=0, watch=("gold", "elixir", 
     3 minutes). Returns True once the results screen is showing."""
     end = (time.monotonic() if started is None else started) + seconds
     left, moved = {}, None                # the loot left in the base, and when it last went down
+    auto_4x = bool(bot.settings.get("loot", {}).get("auto_4x_speed", True))
+    speed_active = False
+    speed_attempted = False
+    last_speed_check = 0.0
     while time.monotonic() < end:
         frame = bot.shot()
         if _results(frame):
             return True
+
+        # The scout countdown has an "End Battle" button and no speed control.
+        # Wait until the actual battle UI (Surrender) is on screen before looking.
+        now = time.monotonic()
+        if auto_4x and not speed_active and not speed_attempted and now - last_speed_check >= 2.0:
+            last_speed_check = now
+            if vision.find(frame, "battle/surrender"):
+                result = ensure_four_x(bot, frame=frame)
+                if result is not None:
+                    speed_attempted = True
+                    speed_active = result
+
         if stall:
             for r in watch:
                 v = vision.digits.read(frame, bot.layout.region(f"scout.{r}"))
