@@ -52,9 +52,10 @@ def use_first_recipe(bot):
             if uses:
                 break
         if not uses:
-            bot.save_error("army-no-recipes")
-            log.warning("Army: no recipe to use on the Saved Recipes tab (none saved?)")
-            return None
+            # A saved recipe is optional: users may already have their preferred army loaded.
+            # Keep it and continue rather than reporting a failed run or saving a false error screenshot.
+            log.info("Army: no Saved Recipe found; keeping the army already loaded in-game")
+            return ""
         first = uses[0]
         k = first.box[2] / vision.templates.image("army/recipe_use").shape[1]
         name, _ = vision.text_reader.read_line(frame, (int(first.x - 1340 * k), int(first.y - 72 * k), int(420 * k),
