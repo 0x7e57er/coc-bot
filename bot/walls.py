@@ -205,7 +205,7 @@ def _find_upgrade_more(bot, timeout=5.0):
             return None
         if match:
             best_score = max(best_score, match.score)
-            if match.score >= 0.80:
+            if match.score >= 0.78:
                 log.debug("Walls: Upgrade More match %.3f at scale %.3f", match.score, scale)
                 return match
         bot.sleep(0.25)
