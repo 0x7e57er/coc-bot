@@ -217,9 +217,11 @@ def ensure_army(bot, account):
     name = army.use_first_recipe(bot)
     account["_army_set"] = True
     if name is None:
-        log.warning("%s: the first saved recipe could not be used - attacking with the army it has", account["name"])
+        log.info("%s: no saved recipe to apply; keeping the army already loaded in-game", account["name"])
+    elif name:
+        log.info("%s: loaded saved recipe '%s'", account["name"], name)
     else:
-        log.info("%s: army set to the first saved recipe%s", account["name"], f" '{name}'" if name else "")
+        log.info("%s: loaded the first saved recipe (its name could not be read)", account["name"])
     return True
 
 

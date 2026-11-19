@@ -192,7 +192,7 @@ def _label(frame, cx):
     return frame[y:y + space.s(50), max(0, cx - space.s(12)):cx + space.s(54)].astype(np.int16)
 
 
-def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
+def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count_override=None):
     """Drop every unit on the card at cx, checking that each tap really deployed one.
 
     Returns True only when the card was observed to change / empty, False if no deployment
@@ -220,7 +220,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
         log.warning("No usable deploy spots left")
         return False
     moves = {}
-    count = None if single else read_count(frame, cx)
+    count = count_override if count_override is not None else (None if single else read_count(frame, cx))
     by_count = count is not None
     left = count if by_count else 1
     queue = _spread(spots, left)
@@ -491,8 +491,17 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
     # Other spells are dropped just inside the successful troop groups.
     for cx, n in spells:
         control.checkpoint()
+        frame = bot.shot()
+        count = read_count(frame, cx)
+        if count is None:
+            count = bar_count(frame, cx)
+        if count == 0:
+            log.info("Skipping used-up spell card at %d", cx)
+            continue
+
         spots = [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind]
-        deployed = _drop(bot, cx, spots, centre, fixes=fixes,
+        _pick(bot, cx)  # select the spell before its first battlefield tap
+        deployed = _drop(bot, cx, spots, centre, fixes=fixes, count_override=count,
                          reselect=lambda x=cx: _pick(bot, x))
         if deployed:
             log.info("Spell card at %d deployed", cx)
@@ -550,11 +559,13 @@ SPEED_BUTTON_THRESHOLD = 0.82
 def _find_speed_button(frame, key):
     """Find a speed-button template across emulator UI scales in the fixed lower-right region."""
     match, scale = vision.find_scaled(
-        frame, key, scales=SPEED_BUTTON_SCALES, threshold=SPEED_BUTTON_THRESHOLD
+        frame, key, scales=SPEED_BUTTON_SCALES, threshold=0.0
     )
-    if match:
-        log.debug("Speed button %s matched at %.3f (scale %.3f)", key, match.score, scale)
-    return match
+    if not match:
+        log.debug("Speed button %s had no template match", key)
+        return None
+    log.debug("Speed button %s best match %.3f (scale %.3f)", key, match.score, scale)
+    return match if match.score >= SPEED_BUTTON_THRESHOLD else None
 
 
 def ensure_four_x(bot, timeout=2.5):
@@ -574,6 +585,7 @@ def ensure_four_x(bot, timeout=2.5):
     one = _find_speed_button(frame, speed_1x)
     if not one:
         log.warning("Battle speed button not recognized as 1x or 4x; leaving it unchanged")
+        bot.save_error("speed-button-unrecognized", frame)
         return False
 
     log.info("Battle speed is 1x; switching to 4x")
