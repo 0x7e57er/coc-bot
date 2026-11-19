@@ -324,10 +324,11 @@ def bar_count(frame, cx):
 
 
 def bar_cards(frame, slots):
-    """Read the live troop bar in game order: counted troops, uncounted siege/heroes, counted spells.
+    """Read the live troop bar: counted troops, uncounted siege/heroes, then spells.
 
-    A dark corner on one hero card must not stop scanning cards to its right. An uncounted
-    candidate is treated as blank only when both the corner and whole-card probes look empty.
+    Spell counts can be read even when later spell-card counts fail OCR. The first counted
+    card after the first uncounted card marks the start of the spell section; keep every
+    subsequent card in that section as a spell, including cards whose count OCR failed.
     """
     cards = []
     scanned = []
@@ -342,21 +343,72 @@ def bar_cards(frame, slots):
             scanned.append(f"{cx}: blank")
             continue
         cards.append((cx, n))
-        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)} (corner_blank={blank}, grey={grey})")
-    log.info("Troop bar scan (%d candidate slots): %s", len(slots), ", ".join(scanned) or "none")
-    singles_at = [i for i, (_, n) in enumerate(cards) if n is None]
-    if singles_at:
-        troops = [c for c in cards[:singles_at[0]] if c[1]]
-        spells = [c for c in cards[singles_at[-1] + 1:] if c[1]]
+        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)} "
+                       f"(corner_blank={blank}, grey={grey})")
+
+    first_single = next((i for i, (_, n) in enumerate(cards) if n is None), None)
+    spell_start = None
+    if first_single is not None:
+        spell_start = next((i for i in range(first_single + 1, len(cards))
+                            if cards[i][1] is not None), None)
+
+    if first_single is None:
+        troops = [c for c in cards if c[1] is not None]
+        singles, spells = [], []
+    elif spell_start is None:
+        troops = [c for c in cards[:first_single] if c[1] is not None]
+        singles = [cx for cx, n in cards[first_single:] if n is None]
+        spells = []
     else:
-        troops, spells = [c for c in cards if c[1]], []
-    return troops, [cards[i][0] for i in singles_at], spells
+        troops = [c for c in cards[:first_single] if c[1] is not None]
+        singles = [cx for cx, n in cards[first_single:spell_start] if n is None]
+        # Preserve later cards even if their count could not be read. _drop will verify them
+        # by count where possible, otherwise by a card-image change.
+        spells = [(cx, n) for cx, n in cards[spell_start:]]
+
+    log.info("Troop bar scan (%d candidate slots): %s", len(slots), ", ".join(scanned) or "none")
+    log.info("Troop bar sections: %d troop(s), %d single(s), %d spell card(s)",
+             len(troops), len(singles), len(spells))
+    return troops, singles, spells
 
 
 def _pick(bot, cx):
     """Select the card at x on the troop bar."""
     bot.tap(cx, _card_y(), jitter=4)
     return True
+
+
+def _cast_one_spell(bot, cx, point, label):
+    """Cast one spell at a point and confirm the troop-bar count actually decreases."""
+    _pick(bot, cx)
+    time.sleep(0.08)
+    before_frame = bot.shot()
+    before = read_count(before_frame, cx)
+    if before is None:
+        before = bar_count(before_frame, cx)
+    card_before = _card(before_frame, cx)
+    bot.tap(*point, jitter=2)
+
+    after = None
+    for pause in (0.12, 0.16, 0.2, 0.25):
+        time.sleep(pause)
+        frame = bot.shot()
+        if slot_empty(frame, cx):
+            log.info("%s spell at %s confirmed (card used up)", label, point)
+            return True
+        after = read_count(frame, cx)
+        if after is None:
+            after = bar_count(frame, cx)
+        if before is not None and after is not None and after < before:
+            log.info("%s spell at %s confirmed (%s -> %s)", label, point, before, after)
+            return True
+        if before is None and after is None and np.abs(_card(frame, cx) - card_before).mean() > 12:
+            log.info("%s spell at %s card changed; deployment likely", label, point)
+            return True
+
+    log.warning("%s spell at %s was NOT confirmed (count %s -> %s)",
+                label, point, before, after)
+    return False
 
 
 def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
@@ -397,21 +449,16 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
             time.sleep(0.07)
         if clone_x is not None and cast < clones:
             time.sleep(0.15)
-            _pick(bot, clone_x)
-            # The first unit was confirmed at this exact point: cast on it, not a guessed offset.
-            bot.tap(*spot, jitter=2)
-            cast += 1
-            log.info("Clone %d/%d cast on deployed group at %s", cast, clones, spot)
-            time.sleep(0.1)
+            if _cast_one_spell(bot, clone_x, spot, f"Clone {cast + 1}/{clones}"):
+                cast += 1
 
     # If there are more Clone spells than successful groups, reuse only confirmed troop locations.
     while clone_x is not None and cast < clones and good:
         spot = good[cast % len(good)]
-        _pick(bot, clone_x)
-        bot.tap(*spot, jitter=2)
-        cast += 1
-        log.info("Clone %d/%d cast on deployed group at %s", cast, clones, spot)
-        time.sleep(0.1)
+        if _cast_one_spell(bot, clone_x, spot, f"Clone {cast + 1}/{clones}"):
+            cast += 1
+        else:
+            break
 
     bot.deploy_spots = good
     behind = good or sides
@@ -444,9 +491,13 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
     # Other spells are dropped just inside the successful troop groups.
     for cx, n in spells:
         control.checkpoint()
-        _pick(bot, cx)
-        _drop(bot, cx, [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind], centre, fixes=fixes,
-              reselect=lambda x=cx: _pick(bot, x))
+        spots = [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind]
+        deployed = _drop(bot, cx, spots, centre, fixes=fixes,
+                         reselect=lambda x=cx: _pick(bot, x))
+        if deployed:
+            log.info("Spell card at %d deployed", cx)
+        else:
+            log.warning("Spell card at %d was not confirmed; check troop-bar count / screenshot", cx)
     return [cx for cx, _ in troops]
 
 
