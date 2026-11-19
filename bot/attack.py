@@ -540,7 +540,44 @@ def _land(bot, cx, spot, centre, tries=4):
     return None
 
 
+def ensure_four_x(bot, timeout=2.5):
+    """Enable 4x battle speed when the battle button is visibly at 1x.
+
+    The state is identified with the button's own image, not a guessed click:
+    unknown / transitional states are left alone, and a tap is never repeated.
+    """
+    speed_1x = "battle/speed_1x"
+    speed_4x = "battle/speed_4x"
+    frame = bot.shot()
+    four = vision.find(frame, speed_4x)
+    if four:
+        log.info("Battle speed already at 4x")
+        return True
+
+    one = vision.find(frame, speed_1x)
+    if not one:
+        log.warning("Battle speed button not recognized as 1x or 4x; leaving it unchanged")
+        return False
+
+    log.info("Battle speed is 1x; switching to 4x")
+    bot.tap_match(one, jitter=0)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        control.sleep(0.15)
+        frame = bot.shot()
+        if vision.find(frame, speed_4x):
+            log.info("Battle speed switched to 4x (verified)")
+            return True
+
+    log.warning("4x speed was not confirmed after the tap; continuing without tapping again")
+    return False
+
+
 def deploy(bot, plan):
+    # Start the battle clock before the speed toggle so its verification time counts too.
+    bot.deploy_started = time.monotonic()
+    ensure_four_x(bot)
+
     s = bot.settings["loot"]
     smart, verify = s.get("smart_deploy", True), s.get("count_troops", True)
     offsets = plan.get("offsets") or [[0, 0]]
@@ -571,7 +608,6 @@ def deploy(bot, plan):
 
     fixes = {}                                  # bad spot -> corrected spot, shared by all units
     bot.deploy_spots = []
-    bot.deploy_started = time.monotonic()       # the battle clock starts here (not while reading the base)
     if plan.get("style") == "clone_groups" and verify:
         troops = deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes)
         frame = bot.shot()                      # the troops left over: on the ring where the others landed
