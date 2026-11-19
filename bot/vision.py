@@ -78,6 +78,8 @@ class TemplateStore:
                 if not os.path.exists(p):
                     raise FileNotFoundError(f"Template missing: {key}")
                 img = cv2.imdecode(np.fromfile(p, dtype=np.uint8), cv2.IMREAD_COLOR)
+                if img is None or img.size == 0:
+                    raise ValueError(f"Template image could not be decoded: {p}")
                 self._images[key] = img
             return img
 

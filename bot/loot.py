@@ -209,11 +209,10 @@ def loot_until_full(bot, account):
 
 
 def ensure_army(bot, account):
-    """Before the first attack of a visit: army screen -> Saved Recipes -> the first recipe (confirmed only when the
-    game asks: troops in the Clan Castle). When that fails the account attacks with the army it has. True."""
+    """Before the first attack of a visit, select the first entry in the Saved Recipes dropdown."""
     if account.get("_army_set"):
         return True
-    bot.action = "Setting the army: Saved Recipes > Use on the top recipe"
+    bot.action = "Setting the army: selecting the first Saved Recipes dropdown entry"
     name = army.use_first_recipe(bot)
     account["_army_set"] = True
     if name is None:
