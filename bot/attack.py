@@ -714,7 +714,7 @@ def finish_battle(bot, seconds, started=None, stall=0, watch=("gold", "elixir", 
         now = time.monotonic()
         if auto_4x and not speed_active and not speed_attempted and now - last_speed_check >= 2.0:
             last_speed_check = now
-            if vision.find(frame, "battle/surrender"):
+            if detect(frame) == "battle":
                 result = ensure_four_x(bot, frame=frame)
                 if result is not None:
                     speed_attempted = True
