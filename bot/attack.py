@@ -328,19 +328,26 @@ def bar_count(frame, cx):
 
 
 def bar_cards(frame, slots):
-    """The troop bar by what its cards are - the game orders it troops, siege machine, heroes, spells: (troops
-    [(x, count)], singles [x] - the siege machine and the heroes, which have no count, spells [(x, count)]).
-    Used-up cards and the empty slots after the last card are left out. Nothing depends on slot numbers: an army
-    with another siege machine, no Queen or an extra spell is read the same way."""
+    """Read the live troop bar in game order: counted troops, uncounted siege/heroes, counted spells.
+
+    A dark corner on one hero card must not stop scanning cards to its right. An uncounted
+    candidate is treated as blank only when both the corner and whole-card probes look empty.
+    """
     cards = []
+    scanned = []
     for cx in slots:
-        if no_card(frame, cx) and bar_count(frame, cx) is None:
-            break                                    # the empty slots: after the last card
-        if slot_empty(frame, cx):
-            continue                                 # used up (grey)
         n = bar_count(frame, cx)
-        if n != 0:
-            cards.append((cx, n))
+        blank = no_card(frame, cx)
+        grey = slot_empty(frame, cx)
+        if n == 0:
+            scanned.append(f"{cx}: used-up x0")
+            continue
+        if n is None and blank and grey:
+            scanned.append(f"{cx}: blank")
+            continue
+        cards.append((cx, n))
+        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)}")
+    log.info("Troop bar scan (%d candidate slots): %s", len(slots), ", ".join(scanned) or "none")
     singles_at = [i for i, (_, n) in enumerate(cards) if n is None]
     if singles_at:
         troops = [c for c in cards[:singles_at[0]] if c[1]]
@@ -357,39 +364,35 @@ def _pick(bot, cx):
 
 
 def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
-    """E-Dragons + Clone, read from the troop bar itself (bar_cards):
-      1. the troops go down in a few tight groups (one per side), each group in one quick burst, and a Clone is
-         cast on every group right after it lands - while the dragons are still inside it;
-      2. the siege machine and every hero, one by one, behind the groups (where the troops really landed);
-      3. other spells on the troops' way, just inside the groups' spots.
-    The troops left over are dropped afterwards by deploy()."""
+    """Deploy counted troops in groups, then siege/heroes, then non-Clone spells."""
     troops, singles, spells = bar_cards(frame, slots)
     clone_x = clone_card(frame, slots)
     troops = [t for t in troops if t[0] != clone_x]
     spells = [t for t in spells if t[0] != clone_x]
     clones = (read_count(frame, clone_x) or 1) if clone_x is not None else 0
     sides = _sides(plan, ring, centre)
-    groups = []                                       # (spot, x, n)
+    groups = []
     for cx, n in troops:
         k = len(sides)
         for i, spot in enumerate(sides):
             share = n // k + (1 if i < n % k else 0)
             if share:
                 groups.append((spot, cx, share))
-    log.info("Troop bar: %d troop card(s), %d siege machine / hero card(s), %d other spell card(s)%s. Deploying "
-             "%d group(s) on %d side(s)", len(troops), len(singles), len(spells),
-             f", {clones} Clone spell(s)" if clone_x is not None else ", no Clone spell", len(groups), len(sides))
+    log.info("Troop bar: %d troop card(s), %d siege machine / hero card(s), %d other spell card(s)%s. "
+             "Deploying %d group(s) on %d side(s)", len(troops), len(singles), len(spells),
+             f", {clones} Clone spell(s)" if clone_x is not None else ", no Clone spell",
+             len(groups), len(sides))
+
     cast = 0
     good = []
-    for spot, cx, n in groups:
+    for preferred, cx, n in groups:
         control.checkpoint()
         _pick(bot, cx)
-        spot = _land(bot, cx, spot, centre)            # the first unit shows the spot can be used
+        spot = _land_with_fallback(bot, cx, preferred, centre, ring)
         if spot is None:
-            log.info("No usable spot on this side (red area): its %d unit(s) go elsewhere", n)
+            log.info("No usable spot near %s: its %d unit(s) remain for the later ring drop", preferred, n)
             continue
         good.append(spot)
-        # the others along the ring at that spot (same distance from the base: no red area)
         tx, ty = centre[1] - spot[1], spot[0] - centre[0]
         d = math.hypot(tx, ty) or 1.0
         for i in range(1, n):
@@ -399,35 +402,66 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
         if clone_x is not None and cast < clones:
             time.sleep(0.15)
             _pick(bot, clone_x)
-            bot.tap(*_toward(spot, centre, space.f(CLONE_IN)), jitter=2)
+            # The first unit was confirmed at this exact point: cast on it, not a guessed offset.
+            bot.tap(*spot, jitter=2)
             cast += 1
+            log.info("Clone %d/%d cast on deployed group at %s", cast, clones, spot)
             time.sleep(0.1)
-    # Clones left over (more Clones than groups): on the groups again, in the same order
-    while clone_x is not None and cast < clones and groups:
-        spot = groups[cast % len(groups)][0]
+
+    # If there are more Clone spells than successful groups, reuse only confirmed troop locations.
+    while clone_x is not None and cast < clones and good:
+        spot = good[cast % len(good)]
         _pick(bot, clone_x)
-        bot.tap(*_toward(spot, centre, space.f(CLONE_IN + 30)), jitter=2)
+        bot.tap(*spot, jitter=2)
         cast += 1
+        log.info("Clone %d/%d cast on deployed group at %s", cast, clones, spot)
         time.sleep(0.1)
-    bot.deploy_spots = good                           # where units really landed (for leftovers)
+
+    bot.deploy_spots = good
     behind = good or sides
-    # the siege machine and the heroes, one each, behind the groups
+
+    # Deploy the siege machine and every available hero. If the preferred point fails, _drop
+    # advances through nearby points on the ring rather than giving up on that hero.
     for i, cx in enumerate(singles):
         control.checkpoint()
         if slot_empty(bot.shot(), cx):
             continue
         _pick(bot, cx)
-        _drop(bot, cx, [behind[i % len(behind)]], centre, single=True, fixes=fixes,
+        preferred = behind[i % len(behind)]
+        candidates = ring or sides
+        alternatives = sorted(
+            (p for p in candidates if p != preferred),
+            key=lambda p: (p[0] - preferred[0]) ** 2 + (p[1] - preferred[1]) ** 2,
+        )
+        _drop(bot, cx, [preferred] + alternatives, centre, single=True, fixes=fixes,
               reselect=lambda x=cx: _pick(bot, x))
         time.sleep(0.1)
-    log.debug("Siege machine / heroes: %d card(s) deployed behind %d spot(s)", len(singles), len(behind))
-    # other spells on the troops' way
+    log.info("Attempted deployment for %d siege machine / hero card(s) across %d candidate spot(s)",
+             len(singles), len(ring or sides))
+
+    # Other spells are dropped just inside the successful troop groups.
     for cx, n in spells:
         control.checkpoint()
         _pick(bot, cx)
         _drop(bot, cx, [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind], centre, fixes=fixes,
               reselect=lambda x=cx: _pick(bot, x))
     return [cx for cx, _ in troops]
+
+
+def _land_with_fallback(bot, cx, spot, centre, ring, alternatives=5):
+    """Try the preferred side first, then nearby points on the detected deploy line."""
+    candidates = [spot]
+    if ring:
+        nearby = sorted(
+            (p for p in ring if p != spot),
+            key=lambda p: (p[0] - spot[0]) ** 2 + (p[1] - spot[1]) ** 2,
+        )
+        candidates.extend(nearby[:alternatives])
+    for candidate in candidates:
+        landed = _land(bot, cx, candidate, centre)
+        if landed is not None:
+            return landed
+    return None
 
 
 def _land(bot, cx, spot, centre, tries=4):
