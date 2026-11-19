@@ -348,7 +348,7 @@
     },
     "style": "clone_groups"
   },
-  "TH17 - Root Rider + Valkyrie": {
+  "root_valk": {
     "description": "Easy ground spam with regular troops only: Root Riders + Valkyries in 3 groups, then heroes, siege and spells; no Super Troops",
     "offsets": [
       [

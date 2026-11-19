@@ -540,21 +540,38 @@ def _land(bot, cx, spot, centre, tries=4):
     return None
 
 
+SPEED_BUTTON_SCALES = [
+    0.75, 0.775, 0.80, 0.825, 0.85, 0.875, 0.90, 0.925, 0.95, 0.975,
+    1.00, 1.025, 1.05, 1.075, 1.10, 1.125, 1.15, 1.175, 1.20,
+]
+SPEED_BUTTON_THRESHOLD = 0.82
+
+
+def _find_speed_button(frame, key):
+    """Find a speed-button template across emulator UI scales in the fixed lower-right region."""
+    match, scale = vision.find_scaled(
+        frame, key, scales=SPEED_BUTTON_SCALES, threshold=SPEED_BUTTON_THRESHOLD
+    )
+    if match:
+        log.debug("Speed button %s matched at %.3f (scale %.3f)", key, match.score, scale)
+    return match
+
+
 def ensure_four_x(bot, timeout=2.5):
     """Enable 4x battle speed when the battle button is visibly at 1x.
 
-    The state is identified with the button's own image, not a guessed click:
-    unknown / transitional states are left alone, and a tap is never repeated.
+    Search a range of image scales because BlueStacks / Google Play Games can
+    produce different game-space sizes. Unknown states are left untouched.
     """
     speed_1x = "battle/speed_1x"
     speed_4x = "battle/speed_4x"
     frame = bot.shot()
-    four = vision.find(frame, speed_4x)
+    four = _find_speed_button(frame, speed_4x)
     if four:
         log.info("Battle speed already at 4x")
         return True
 
-    one = vision.find(frame, speed_1x)
+    one = _find_speed_button(frame, speed_1x)
     if not one:
         log.warning("Battle speed button not recognized as 1x or 4x; leaving it unchanged")
         return False
@@ -565,13 +582,12 @@ def ensure_four_x(bot, timeout=2.5):
     while time.monotonic() < deadline:
         control.sleep(0.15)
         frame = bot.shot()
-        if vision.find(frame, speed_4x):
+        if _find_speed_button(frame, speed_4x):
             log.info("Battle speed switched to 4x (verified)")
             return True
 
     log.warning("4x speed was not confirmed after the tap; continuing without tapping again")
     return False
-
 
 def deploy(bot, plan):
     # Start the battle clock before the speed toggle so its verification time counts too.

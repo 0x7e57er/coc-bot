@@ -1992,7 +1992,7 @@
       140,
       160
     ],
-    "threshold": 0.86
+    "threshold": 0.82
   },
   "battle/speed_4x": {
     "box": [
@@ -2007,6 +2007,6 @@
       140,
       160
     ],
-    "threshold": 0.86
+    "threshold": 0.82
   }
 }

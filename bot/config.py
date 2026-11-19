@@ -140,8 +140,14 @@ _lock = threading.Lock()
 def load_settings():
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH, encoding="utf-8") as f:
-            return _merge(DEFAULT_SETTINGS, json.load(f))
-    return copy.deepcopy(DEFAULT_SETTINGS)
+            settings = _merge(DEFAULT_SETTINGS, json.load(f))
+    else:
+        settings = copy.deepcopy(DEFAULT_SETTINGS)
+
+    # Preserve existing user settings after the Root Rider + Valkyrie plan was renamed.
+    if settings["loot"].get("attack_plan") == "TH17 - Root Rider + Valkyrie":
+        settings["loot"]["attack_plan"] = "root_valk"
+    return settings
 
 
 def save_settings(settings):
