@@ -1146,10 +1146,10 @@ class Window(QMainWindow):
         row(g, "Zoom out before searching", None, check("zoom_out", lo["zoom_out"]))
 
         g = section("Army", "shield", right)
-        g.addWidget(_label("Before the first attack on each account: army screen > the Saved Recipes tab > Use on "
-                           "the top recipe. The game asks to confirm only when the Clan Castle has troops (then "
-                           "Okay). Put your looting army first in each account's Saved Recipes.", "help", wrap=True),
-                    g.rowCount(), 0, 1, 2)
+        g.addWidget(_label("Before the first attack on each account: open Edit Army > My Army > click the "
+                           "dropdown arrow beside Saved Recipes > select the first saved army. Put your looting "
+                           "army first in that dropdown list. The game may ask to confirm when Clan Castle troops "
+                           "are present.", "help", wrap=True), g.rowCount(), 0, 1, 2)
 
         wl = s.get("walls", {})
         g = section("Loot + walls", "shield", right)

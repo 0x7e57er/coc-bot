@@ -86,18 +86,34 @@ def use_first_recipe(bot):
         target = (arrow.x, int(y + h / 2))
         log.info("Army: selecting first Saved Recipes dropdown option '%s' (OCR %.2f)", name, confidence)
         bot.tap(*target, jitter=1)
-        bot.sleep(0.65)
 
-        # A successful menu selection closes the dropdown. If it remains, do not claim the
-        # army was loaded; save the screen so the menu geometry can be corrected.
+        # The game may ask to confirm replacing Clan Castle troops. Handle that only
+        # when its explicit Okay button is visible.
+        deadline = time.monotonic() + 2.5
+        selected = False
         after = bot.shot()
-        after_lines = vision.text_reader.read(after, menu_region)
-        still_open = any(
-            (t or "").strip().casefold() == name.casefold()
-            and y0 >= arrow.y + space.s(45)
-            for t, conf, (x0, y0, w0, h0) in after_lines if conf >= 0.30
-        )
-        if still_open:
+        while time.monotonic() < deadline:
+            after = bot.shot()
+            okay = vision.find(after, "battle/confirm_okay")
+            if okay:
+                bot.tap_match(okay, jitter=2)
+                bot.sleep(0.65)
+                log.info("Army: confirmed loading the saved recipe with Clan Castle troops")
+                selected = True
+                break
+
+            after_lines = vision.text_reader.read(after, menu_region)
+            still_open = any(
+                (t or "").strip().casefold() == name.casefold()
+                and y0 >= arrow.y + space.s(45)
+                for t, conf, (x0, y0, w0, h0) in after_lines if conf >= 0.30
+            )
+            if not still_open:
+                selected = True
+                break
+            bot.sleep(0.2)
+
+        if not selected:
             log.warning("Army: dropdown option '%s' remained visible after selection; not confirmed", name)
             bot.save_error("army-recipe-selection-unconfirmed", after)
             return None

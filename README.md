@@ -53,9 +53,9 @@ Then it goes on to the next account. Or:
    - Optional `"full_at": {"elixir": 20000000}`: this account's own full amount, which overrides the
      table.
 
-5. In every account, put your looting army **first** in Saved Recipes. The bot presses Use on the
-   top recipe before the first attack on each account. If no saved recipe is available, it keeps the
-   army already loaded in-game and continues.
+5. In every account, put your looting army **first** in the Saved Recipes dropdown list. Before the
+   first attack, the bot opens Edit Army > My Army, clicks the arrow beside Saved Recipes and selects the
+   first entry. If no saved recipe can be selected, it keeps the army already loaded in-game.
 
 ## Windows executable
 
@@ -131,9 +131,9 @@ python main.py --check              only check the setup, and save what the bot 
 3. **Full?** The bot reads gold, elixir and dark elixir on the village. An account is full when the
    watched resource (elixir by default) reaches `full_at` for its Town Hall in `settings.json`. If
    the storages stop growing for 2 attacks, the account also counts as full.
-4. **Army**: before the first attack: Battle > Edit Army > the **Saved Recipes** tab > **Use** on the first
-   (top) recipe. The game asks to confirm only when the Clan Castle has troops; then the bot presses Okay. If
-   there is no recipe to use, the account attacks with the army it has, and the log says so.
+4. **Army**: before the first attack: Battle > Edit Army > My Army > the dropdown arrow beside
+   **Saved Recipes** > select the first (top) army. The bot handles a Clan Castle confirmation if the game
+   asks. If no recipe can be selected, the account attacks with the army it already has, and the log says so.
 5. **Search**: Attack > Find a Match > Attack!. Then it presses Next until a base has at least the
    `min_loot` for this account's Town Hall. The loot numbers are read with the game's own digit
    images. It gives up after 150 searches.
@@ -362,7 +362,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 - `bot/vision.py`: finds images on the screen, reads the game's digits, and reads text (account names).
 - `bot/states.py`: detects which screen the game is on and gets back to the village.
 - `bot/account.py`: switches accounts.
-- `bot/army.py`: the army screen, and the first saved recipe before looting.
+- `bot/army.py`: the army screen, and selecting the first saved army from the Saved Recipes dropdown.
 - `bot/loot.py`: decides when an account is full, searches for a base, attacks, and loots until full.
 - `bot/attack.py`, `bot/deployzone.py`: deploy troops and end the battle.
 - `bot/raid.py`: Clan Capital raids: the airship, the capital army, the districts, deploying, restarting.

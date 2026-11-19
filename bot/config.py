@@ -77,7 +77,7 @@ DEFAULT_SETTINGS = {
         "auto_4x_speed": True,               # enable 4x once its control appears during an active battle
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
-        # the army: before the first attack of each visit, Saved Recipes -> the first recipe (bot/army.py)
+        # the army: before the first attack of each visit, My Army -> Saved Recipes dropdown -> first entry
     },
     "raid": {
         "attacks": 6,                       # raid attacks per account per Raid Weekend (5, 6 with the bonus)
