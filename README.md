@@ -53,8 +53,9 @@ Then it goes on to the next account. Or:
    - Optional `"full_at": {"elixir": 20000000}`: this account's own full amount, which overrides the
      table.
 
-5. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
-   bot presses Use on the top recipe of the Saved Recipes tab before the first attack on each account.
+5. In every account, put your looting army **first** in Saved Recipes. The bot presses Use on the
+   top recipe before the first attack on each account. If no saved recipe is available, it keeps the
+   army already loaded in-game and continues.
 
 ## Windows executable
 
