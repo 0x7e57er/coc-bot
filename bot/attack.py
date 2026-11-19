@@ -237,7 +237,7 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
             time.sleep(pause)
             waited += pause
             frame = bot.shot()
-            if slot_empty(frame, cx):
+            if not single and slot_empty(frame, cx):
                 good.append((x, y))
                 return True
             if by_count:
