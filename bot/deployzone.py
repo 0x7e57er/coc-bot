@@ -149,7 +149,6 @@ def deploy_geometry(frame, count=24, margin=70):
     return points[:count], (int(round(cx)), int(round(cy)))
 
 
-
 def deploy_line(frame, count=24, margin=70):
     """Backward-compatible points-only wrapper around deploy_geometry()."""
     points, _ = deploy_geometry(frame, count=count, margin=margin)

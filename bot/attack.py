@@ -221,6 +221,8 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
         return False
     moves = {}
     count = count_override if count_override is not None else (None if single else read_count(frame, cx))
+    if not single and count is None:
+        count = bar_count(frame, cx)
     by_count = count is not None
     if quantity is not None:
         quantity = max(0, int(quantity))
@@ -252,6 +254,8 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
                 return True
             if by_count:
                 now = read_count(frame, cx)
+                if now is None:
+                    now = bar_count(frame, cx)
                 if quantity is None:
                     if now is not None and now < left:
                         left, ok = now, True
