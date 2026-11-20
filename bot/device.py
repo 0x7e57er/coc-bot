@@ -207,12 +207,12 @@ class BlueStacksDevice:
         return r.stdout.decode(errors="replace")
 
     def _booted(self):
-        try:
-            subprocess.run([self.adb, "connect", self.serial], capture_output=True, timeout=15,
+        try:                                # (short timeouts: Stop waits for the call in progress)
+            subprocess.run([self.adb, "connect", self.serial], capture_output=True, timeout=6,
                            creationflags=subprocess.CREATE_NO_WINDOW)
         except subprocess.TimeoutExpired:
             return False
-        return self._run("shell", "getprop", "sys.boot_completed", timeout=10).strip() == "1"
+        return self._run("shell", "getprop", "sys.boot_completed", timeout=6).strip() == "1"
 
     def connect(self):
         """BlueStacks running (started when it is not), Android booted and the window full screen."""
@@ -220,15 +220,24 @@ class BlueStacksDevice:
             if not self.bs.adb_enabled():
                 raise RuntimeError("ADB is off in BlueStacks: switch it on in BlueStacks Settings > Advanced > "
                                    "Android Debug Bridge (the bot starts and stops the game with it)")
-            log.info("Starting BlueStacks (%s)...", self.inst["name"])
-            self.bs.start(self.inst["name"])
-            end = time.monotonic() + self.BOOT_SECONDS
-            while not self._booted():
-                if time.monotonic() > end:
+            for attempt in (1, 2):
+                log.info("Starting BlueStacks (%s)...", self.inst["name"])
+                self.bs.start(self.inst["name"])
+                end = time.monotonic() + self.BOOT_SECONDS
+                while not self._booted() and time.monotonic() < end:
+                    control.sleep(3)                     # (Stop is seen here, not after the 150 s)
+                    self.inst = self.bs.instance(self.inst["name"])      # the port can change when it starts
+                    self.serial = f"127.0.0.1:{self.inst['port']}"
+                if self._booted():
+                    break
+                if attempt == 2 or not self.find_window():
                     raise RuntimeError(f"BlueStacks did not start within {self.BOOT_SECONDS} s")
-                time.sleep(3)
-                self.inst = self.bs.instance(self.inst["name"])      # the port can change when it starts
-                self.serial = f"127.0.0.1:{self.inst['port']}"
+                # its window is there but Android does not answer: BlueStacks is frozen (seen 2026-11-20: the
+                # screen stood still and every start waited 150 s again) - closed and started again
+                log.warning("BlueStacks is open but does not answer (frozen?): closing it and starting it again")
+                self._hwnd = None
+                close_bluestacks(self.inst["title"])
+                control.sleep(3)
             log.info("BlueStacks is up")
         self.full_screen()
         sw, sh = screen_size()
@@ -289,17 +298,17 @@ class BlueStacksDevice:
         while not self.find_window():                    # the window comes a moment after Android
             if time.monotonic() > end:
                 raise RuntimeError(f"BlueStacks window '{self.inst['title']}' not found")
-            time.sleep(1)
+            control.sleep(1)
         for _ in range(3):
             if self.is_full_screen():
                 return
             log.info("Putting BlueStacks in full screen")
             if not bring_to_front(self.find_window()):
-                time.sleep(2.0)                          # F11 would go to the window in front: not now
+                control.sleep(2.0)                       # F11 would go to the window in front: not now
                 continue
             self._kb.press(self._Key.f11)
             self._kb.release(self._Key.f11)
-            time.sleep(2.0)
+            control.sleep(2.0)
         if not self.is_full_screen():
             raise RuntimeError("BlueStacks is not in full screen: press F11 in BlueStacks")
 

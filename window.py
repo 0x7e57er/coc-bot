@@ -1675,7 +1675,9 @@ class Window(QMainWindow):
 
     def stop(self):
         control.stop()
-        self.note("Stopping...")
+        doing = getattr(getattr(self, "bot", None), "action", "") or ""
+        logging.getLogger("bot").info("Stop pressed (window)%s", f" during: {doing}" if doing else "")
+        self.note("Stopping..." + (f" (after: {doing})" if doing else ""))
 
     def _come_back(self):
         """After a run (F10 too) BlueStacks still fills the screen: the window comes back in front of it."""

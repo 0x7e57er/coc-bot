@@ -235,13 +235,69 @@ def _asked(text):
     return (int(re.sub(r"\D", "", m.group(1))), m.group(2)) if m else (None, None)
 
 
+def _one_buttons(frame):
+    """The selected wall's own Upgrade buttons (one hammer; one per resource it takes): [(button, resource,
+    price above it)]."""
+    ups = []
+    for m in vision.find_all(frame, "walls/upgrade_one"):
+        text, _ = vision.text_reader.read_line(frame, (m.x - 65, m.y - 76, 115, 30))
+        digits = re.sub(r"\D", "", text)
+        ups.append((m, upgrade._resource(frame, m.x + 58, m.y - 62), int(digits) if digits else None))
+    return ups
+
+
+def _upgrade_one(bot, row, budget, name):
+    """The last wall of its level (seen live 2026-11-20): Upgrade More is greyed out, and the wall has its own
+    Upgrade buttons - one per resource, the price above each. The resource whose budget pays goes; then whatever the
+    game asks (the "Upgrade Walls" box or an upgrade window) is confirmed only when it shows exactly that price, and
+    the wall counts only when the storage went down by it. Returns (1, resource, price), "busy" or None."""
+    unit = row["cost"]
+    frame = bot.shot()
+    ups = [u for u in _one_buttons(frame) if u[1] in PAY]
+    if not ups:
+        log.info("Walls: %s - neither Upgrade More nor the wall's own Upgrade shows", row["name"])
+        bot.save_error("walls-no-upgrade", frame)
+        return None
+    _remember(bot, name, cost=unit, pays=[r for _, r, _ in ups])
+    res, _ = _choose(ups, budget, unit)
+    if res is None:
+        log.info("Walls: the last %s wall (%s, paid with %s) - not enough of that above what is kept (%s)", f"{unit:,}",
+                 row["name"], " or ".join(r for _, r, _ in ups), loot._fmt(budget))
+        return None
+    btn, _, price = next(u for u in ups if u[1] == res)
+    if price != unit:
+        log.warning("Walls: the last %s wall's %s Upgrade shows %s - not upgraded", f"{unit:,}", res,
+                    f"{price:,}" if price else "?")
+        bot.save_error("walls-one-cost", frame)
+        return None
+    log.debug("Walls: the last wall of %s - its own Upgrade with %s", f"{unit:,}", res)
+    had = _storage(frame, res)
+    bot.tap_match(btn, jitter=3)
+    key, _ = bot.wait_any(["walls/confirm_title", "upgrade/confirm", "upgrade/builders_busy"], 4)
+    if key == "walls/confirm_title":
+        if not _confirm(bot, unit, res):
+            return None
+    elif key == "upgrade/confirm":
+        started = upgrade._confirm(bot, {"name": row["name"], "cost": unit})
+        if started is None or started == "busy":
+            return started
+    done = _result(bot, res, had, unit)              # (no box at all: the storage says whether it went)
+    if done == "busy":
+        return "busy"
+    if done != "paid":
+        log.warning("Walls: the last %s wall - the %s storage did not go down by %s - not counted", f"{unit:,}", res,
+                    f"{unit:,}")
+        bot.save_error("walls-one-not-paid")
+        return None
+    return 1, res, unit
+
+
 def _upgrade_level(bot, row, budget, name):
     """The wall row is tapped: Upgrade More, choose the resource, add the walls its budget pays for, Upgrade, Okay.
     Returns (walls, resource, amount), "busy" (these walls need a builder and none is free) or None."""
     more = bot.wait("walls/upgrade_more", 4, interval=0.2)
     if not more:
-        log.info("Walls: no Upgrade More under the selected wall")
-        return None
+        return _upgrade_one(bot, row, budget, name)  # the last wall of its level: Upgrade More is greyed
     bot.tap_match(more, jitter=3)
     bot.wait("walls/upgrade", 3, interval=0.2)
     bot.sleep(0.25)                                  # (the totals are drawn)
@@ -311,7 +367,8 @@ def _result(bot, res, had, amount, seconds=4):
             upgrade._close_busy(bot, busy)
             return "busy"
         now = _storage(f, res)
-        if had is not None and now is not None and had - now >= amount * 0.99:
+        if had is not None and now is not None and abs(had - now - amount) <= max(1000, amount // 100):
+            # (the drop must be the price: a misread "14" for 13,779,934 is no proof)
             log.debug("Walls: %s %s -> %s", res, f"{had:,}", f"{now:,}")
             return "paid"
         bot.sleep(0.4)
@@ -397,7 +454,7 @@ def spend(bot, account):
                 control.checkpoint()
                 pays = _payable(_levels(bot, name), budget, row["cost"])
                 if left < 1 or not pays or batches >= MAX_BATCHES:
-                    if not pays and left == row["count"]:
+                    if not pays and left and left == row["count"]:
                         log.debug("Walls: %d at %s - takes %s, can spend %s", left, f"{row['cost']:,}",
                                   "/".join(_levels(bot, name).get(row["cost"]) or PAY), loot._fmt(budget))
                     break

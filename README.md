@@ -97,6 +97,8 @@ python main.py --check              only check the setup, and save what the bot 
 ```
 
 - **F9**: pause / continue. **F10**: stop. Pushing the mouse into a screen corner also stops the bot.
+  Stop (F10 or the window's Stop) takes effect within about a second, also while BlueStacks is starting; the
+  log says "Stop pressed (window) during: ..." with the step it was on.
   When a run ends (F10 too), the window comes back in front of BlueStacks.
 - The mouse is busy while the bot runs, because it clicks on BlueStacks. To use the PC, press F9
   first. If another window takes the front anyway, the bot waits and never clicks on it.
@@ -234,6 +236,9 @@ Each batch:
    the list.
 2. The wall row is tapped: one wall of that level is selected. Then the game's **Upgrade More**. The
    next batch finds its row where the list already is; the list is opened again only when it moved.
+   The **last wall of a level** has Upgrade More greyed out: the wall's own **Upgrade** button of the
+   resource that pays is used instead (the price above it must be the row's), then the same checked
+   confirmation and storage check.
 3. **Add Wall** (+10, +1): every wall still missing is tapped in one go, then the total is read once
    (again only when a tap was lost).
 4. **Upgrade** with the chosen resource. The total on the button must be a whole number of walls, no more
@@ -296,6 +301,9 @@ village; BlueStacks is started if it is closed) and **Close BlueStacks**.
   Temporary Storage"): **Skip**, then **Yes** in "Skip Chest opening? You'll receive the Reward". The
   rewards are kept.
 - **Items Delivered** (a white box after a store gift or purchase): **OKAY**.
+- **Welcome Back Chief!** ("Your Village was Attacked"): its big green **Okay**, only under that title.
+- **BlueStacks frozen** (its window is there, but Android does not answer for 150 s): BlueStacks is closed and
+  started again once, instead of waiting 150 s over and over.
 
 - **Dialogs**: any dark dialog of the game or of Android is read and answered:
   - Connection lost / network failed: **Try Again**, once the internet is back.

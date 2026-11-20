@@ -23,6 +23,7 @@ STATES = [
     ("maintenance", ["popup/maintenance"]),       # "Maintenance break" (news page): wait its estimated time
     ("live_replay", ["battle/live_replay"]),      # someone attacks this village right now: wait until it ends
     ("shop", ["shop/close", "shop/title"]),       # the Shop (gem / money offers): only ever its X
+    ("welcome_back", ["popup/welcome_back"]),     # "Welcome Back Chief! Your Village was Attacked": its Okay
     ("reload", ["popup/try_again", "popup/reload_device", "popup/reload", "popup/anyone_there"]),
     ("donate", ["donate/window_title"]),
     ("chat", ["chat/close"]),                     # clan chat open over the village
@@ -554,6 +555,12 @@ def go_home(bot, timeout=60.0):
                 bot.tap_match(m, jitter=1)          # never the Finish Now (gems / magic item) buttons
             else:
                 _tap_empty(bot, frame)
+        elif state == "welcome_back":
+            m = vision.find(frame, "popup/okay_big")    # (only under this title: a big green Okay elsewhere could
+            if m:                                       #  confirm something)
+                bot.tap_match(m, jitter=3)
+            else:
+                log.info("Welcome Back box: its Okay was not found")
         elif state == "remove_dialog":
             bot.tap_point("dialog.cancel")
         elif state == "request_window":
