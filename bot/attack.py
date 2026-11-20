@@ -192,40 +192,49 @@ def _label(frame, cx):
     return frame[y:y + space.s(50), max(0, cx - space.s(12)):cx + space.s(54)].astype(np.int16)
 
 
-def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
+def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count_override=None, quantity=None):
     """Drop every unit on the card at cx, checking that each tap really deployed one.
 
-    Units with a count (x15) are tracked by the count; a hero, a siege machine or
-    anything without a readable count is one unit, confirmed by its card changing.
-    A tap that did nothing (red area / outside the map) moves that spot and retries.
-    Stops as soon as the card is empty, so the game never auto-selects the next unit
-    under our taps.
+    Returns True only when the card was observed to change / empty, False if no deployment
+    could be confirmed. Counted troop cards are checked by count; single hero/siege cards by
+    their card image changing.
     """
     if not spots:
-        return
+        return False
     fixes = {} if fixes is None else fixes
 
     def fixed(p):
         seen = 0
-        while p is not None and p in fixes and seen < 10:   # corrections learned earlier this attack
+        while p is not None and p in fixes and seen < 10:
             p, seen = fixes[p], seen + 1
         return p
 
     frame = bot.shot()
     wanted = list(spots)
     spots = [p for p in (fixed(p) for p in spots) if p is not None and deployzone.valid_spot(frame, *p)]
-    good = fixes.setdefault("__good__", [])          # spots where a unit was really deployed this attack
+    good = fixes.setdefault("__good__", [])
     if not spots and good:
-        # every planned spot turned out unusable: use the closest spots that worked for others
         ref = wanted[0] if wanted else centre
         spots = sorted(set(good), key=lambda g: (g[0] - ref[0]) ** 2 + (g[1] - ref[1]) ** 2)[:max(1, len(wanted))]
     if not spots:
         log.warning("No usable deploy spots left")
-        return
+        return False
     moves = {}
-    count = None if single else read_count(frame, cx)
+    count = count_override if count_override is not None else (None if single else read_count(frame, cx))
+    if not single and count is None:
+        count = bar_count(frame, cx)
     by_count = count is not None
-    left = count if by_count else 1
+    if quantity is not None:
+        quantity = max(0, int(quantity))
+        if quantity == 0:
+            return True
+        if not by_count:
+            log.warning("Cannot safely deploy a limited group from card %d: its count is unreadable", cx)
+            return False
+        left = min(count, quantity)
+    else:
+        left = count if by_count else 1
+    deployed = 0
     queue = _spread(spots, left)
     tries, max_tries = 0, left * 2 + 10
     while left > 0 and queue and tries < max_tries:
@@ -236,30 +245,41 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
         bot.tap(x, y, jitter=3)
         ok = False
         waited = 0.0
-        for pause in (0.08, 0.1, 0.1, 0.12):               # the bar updates ~0.1-0.2 s after a tap
+        for pause in (0.08, 0.1, 0.1, 0.12):
             time.sleep(pause)
             waited += pause
             frame = bot.shot()
-            if slot_empty(frame, cx):
+            if not single and slot_empty(frame, cx):
                 good.append((x, y))
-                return
+                return True
             if by_count:
                 now = read_count(frame, cx)
-                if now is not None and now < left:
-                    left, ok = now, True
-                    break
+                if now is None:
+                    now = bar_count(frame, cx)
+                if quantity is None:
+                    if now is not None and now < left:
+                        left, ok = now, True
+                        break
+                else:
+                    # A group is only part of the whole card: compare with its absolute
+                    # count before this group, not with the group's smaller target.
+                    expected = count - deployed
+                    if now is not None and now < expected:
+                        used = max(1, expected - now)
+                        deployed += used
+                        left = max(0, left - used)
+                        ok = True
+                        break
                 if now is None and np.abs(_label(frame, cx) - label0).mean() > 10:
-                    left, ok = left - 1, True              # number changed but not readable
+                    left, deployed, ok = left - 1, deployed + 1, True
                     break
             elif np.abs(_card(frame, cx) - card0).mean() > 12:
                 good.append((x, y))
-                return                                      # the single unit is on the field
+                return True
         if ok:
             good.append((x, y))
         log.debug("tap %s: %s, %s left (%.2fs)", (x, y), "ok" if ok else "no effect", left, waited)
         if not ok:
-            # illegal spot: inside the red zone -> move it out; beyond the map -> move it in.
-            # A moved spot must still be on the map and off every button, and moves at most 3 times.
             n = moves.get((x, y), 0) + 1
             nx, ny = _nudge((x, y), centre, outward=deployzone.in_diamond(x, y, inset=-deployzone.MAP_GROW))
             if n <= 3 and deployzone.valid_spot(frame, nx, ny):
@@ -270,9 +290,10 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None):
                 fixes[(x, y)] = None
                 spots = [p for p in spots if p != (x, y)]
             if reselect:
-                reselect()                         # in case a stray tap selected something else
+                reselect()
         if not queue and left > 0:
             queue = [p for p in (fixed(p) for p in _spread(spots, left)) if p is not None]
+    return left <= 0
 
 
 CLONE_IN = 55          # a Clone goes this far inside a dragon group's spot: where the dragons fly to
@@ -328,26 +349,52 @@ def bar_count(frame, cx):
 
 
 def bar_cards(frame, slots):
-    """The troop bar by what its cards are - the game orders it troops, siege machine, heroes, spells: (troops
-    [(x, count)], singles [x] - the siege machine and the heroes, which have no count, spells [(x, count)]).
-    Used-up cards and the empty slots after the last card are left out. Nothing depends on slot numbers: an army
-    with another siege machine, no Queen or an extra spell is read the same way."""
+    """Read the live troop bar: counted troops, uncounted siege/heroes, then spells.
+
+    Spell counts can be read even when later spell-card counts fail OCR. The first counted
+    card after the first uncounted card marks the start of the spell section; keep every
+    subsequent card in that section as a spell, including cards whose count OCR failed.
+    """
     cards = []
+    scanned = []
     for cx in slots:
-        if no_card(frame, cx) and bar_count(frame, cx) is None:
-            break                                    # the empty slots: after the last card
-        if slot_empty(frame, cx):
-            continue                                 # used up (grey)
         n = bar_count(frame, cx)
-        if n != 0:
-            cards.append((cx, n))
-    singles_at = [i for i, (_, n) in enumerate(cards) if n is None]
-    if singles_at:
-        troops = [c for c in cards[:singles_at[0]] if c[1]]
-        spells = [c for c in cards[singles_at[-1] + 1:] if c[1]]
+        blank = no_card(frame, cx)
+        grey = slot_empty(frame, cx)
+        if n == 0:
+            scanned.append(f"{cx}: used-up x0")
+            continue
+        if n is None and blank and grey:
+            scanned.append(f"{cx}: blank")
+            continue
+        cards.append((cx, n))
+        scanned.append(f"{cx}: {'single' if n is None else 'x' + str(n)} "
+                       f"(corner_blank={blank}, grey={grey})")
+
+    first_single = next((i for i, (_, n) in enumerate(cards) if n is None), None)
+    spell_start = None
+    if first_single is not None:
+        spell_start = next((i for i in range(first_single + 1, len(cards))
+                            if cards[i][1] is not None), None)
+
+    if first_single is None:
+        troops = [c for c in cards if c[1] is not None]
+        singles, spells = [], []
+    elif spell_start is None:
+        troops = [c for c in cards[:first_single] if c[1] is not None]
+        singles = [cx for cx, n in cards[first_single:] if n is None]
+        spells = []
     else:
-        troops, spells = [c for c in cards if c[1]], []
-    return troops, [cards[i][0] for i in singles_at], spells
+        troops = [c for c in cards[:first_single] if c[1] is not None]
+        singles = [cx for cx, n in cards[first_single:spell_start] if n is None]
+        # Preserve later cards even if their count could not be read. _drop will verify them
+        # by count where possible, otherwise by a card-image change.
+        spells = [(cx, n) for cx, n in cards[spell_start:]]
+
+    log.info("Troop bar scan (%d candidate slots): %s", len(slots), ", ".join(scanned) or "none")
+    log.info("Troop bar sections: %d troop(s), %d single(s), %d spell card(s)",
+             len(troops), len(singles), len(spells))
+    return troops, singles, spells
 
 
 def _pick(bot, cx):
@@ -356,78 +403,182 @@ def _pick(bot, cx):
     return True
 
 
+def _cast_one_spell(bot, cx, point, label):
+    """Cast one spell at a point and confirm the troop-bar count actually decreases."""
+    _pick(bot, cx)
+    time.sleep(0.08)
+    before_frame = bot.shot()
+    before = read_count(before_frame, cx)
+    if before is None:
+        before = bar_count(before_frame, cx)
+    card_before = _card(before_frame, cx)
+    bot.tap(*point, jitter=2)
+
+    after = None
+    for pause in (0.12, 0.16, 0.2, 0.25):
+        time.sleep(pause)
+        frame = bot.shot()
+        if slot_empty(frame, cx):
+            log.info("%s spell at %s confirmed (card used up)", label, point)
+            return True
+        after = read_count(frame, cx)
+        if after is None:
+            after = bar_count(frame, cx)
+        if before is not None and after is not None and after < before:
+            log.info("%s spell at %s confirmed (%s -> %s)", label, point, before, after)
+            return True
+        if before is None and after is None and np.abs(_card(frame, cx) - card_before).mean() > 12:
+            log.info("%s spell at %s card changed; deployment likely", label, point)
+            return True
+
+    log.warning("%s spell at %s was NOT confirmed (count %s -> %s)",
+                label, point, before, after)
+    return False
+
+
 def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
-    """E-Dragons + Clone, read from the troop bar itself (bar_cards):
-      1. the troops go down in a few tight groups (one per side), each group in one quick burst, and a Clone is
-         cast on every group right after it lands - while the dragons are still inside it;
-      2. the siege machine and every hero, one by one, behind the groups (where the troops really landed);
-      3. other spells on the troops' way, just inside the groups' spots.
-    The troops left over are dropped afterwards by deploy()."""
+    """Deploy counted troops in groups, then siege/heroes, then non-Clone spells."""
     troops, singles, spells = bar_cards(frame, slots)
     clone_x = clone_card(frame, slots)
     troops = [t for t in troops if t[0] != clone_x]
     spells = [t for t in spells if t[0] != clone_x]
     clones = (read_count(frame, clone_x) or 1) if clone_x is not None else 0
     sides = _sides(plan, ring, centre)
-    groups = []                                       # (spot, x, n)
+    groups = []
     for cx, n in troops:
         k = len(sides)
         for i, spot in enumerate(sides):
             share = n // k + (1 if i < n % k else 0)
             if share:
                 groups.append((spot, cx, share))
-    log.info("Troop bar: %d troop card(s), %d siege machine / hero card(s), %d other spell card(s)%s. Deploying "
-             "%d group(s) on %d side(s)", len(troops), len(singles), len(spells),
-             f", {clones} Clone spell(s)" if clone_x is not None else ", no Clone spell", len(groups), len(sides))
+    log.info("Troop bar: %d troop card(s), %d siege machine / hero card(s), %d other spell card(s)%s. "
+             "Deploying %d group(s) on %d side(s)", len(troops), len(singles), len(spells),
+             f", {clones} Clone spell(s)" if clone_x is not None else ", no Clone spell",
+             len(groups), len(sides))
+
     cast = 0
     good = []
-    for spot, cx, n in groups:
+    for preferred, cx, n in groups:
         control.checkpoint()
         _pick(bot, cx)
-        spot = _land(bot, cx, spot, centre)            # the first unit shows the spot can be used
+        spot = _land_with_fallback(bot, cx, preferred, centre, ring)
         if spot is None:
-            log.info("No usable spot on this side (red area): its %d unit(s) go elsewhere", n)
+            log.info("No usable spot near %s: its %d unit(s) remain for the later ring drop", preferred, n)
             continue
-        good.append(spot)
-        # the others along the ring at that spot (same distance from the base: no red area)
+        # _land_with_fallback() already confirmed the first unit. Verify each remaining
+        # unit in this group before using Clone; never rely on an unchecked tap burst.
         tx, ty = centre[1] - spot[1], spot[0] - centre[0]
         d = math.hypot(tx, ty) or 1.0
+        group_spots = []
         for i in range(1, n):
-            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.f(GROUP_SPREAD)
-            bot.tap(int(spot[0] + tx / d * k), int(spot[1] + ty / d * k), jitter=2)
-            time.sleep(0.07)
+            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.f(
+                float(plan.get("group_spread", GROUP_SPREAD))
+            )
+            group_spots.append((int(spot[0] + tx / d * k), int(spot[1] + ty / d * k)))
+        group_complete = True
+        if group_spots:
+            group_complete = _drop(
+                bot, cx, group_spots, centre, fixes=fixes, quantity=n - 1,
+                reselect=lambda x=cx: _pick(bot, x),
+            )
+        if not group_complete:
+            log.warning("Troop group at %s was only partially confirmed; Clone will still be aimed at the landed group",
+                        spot)
+        good.append(spot)
         if clone_x is not None and cast < clones:
             time.sleep(0.15)
-            _pick(bot, clone_x)
-            bot.tap(*_toward(spot, centre, space.f(CLONE_IN)), jitter=2)
+            if _cast_one_spell(bot, clone_x, spot, f"Clone {cast + 1}/{clones}"):
+                cast += 1
+
+    # If there are more Clone spells than successful groups, reuse only confirmed troop locations.
+    while clone_x is not None and cast < clones and good:
+        spot = good[cast % len(good)]
+        if _cast_one_spell(bot, clone_x, spot, f"Clone {cast + 1}/{clones}"):
             cast += 1
-            time.sleep(0.1)
-    # Clones left over (more Clones than groups): on the groups again, in the same order
-    while clone_x is not None and cast < clones and groups:
-        spot = groups[cast % len(groups)][0]
-        _pick(bot, clone_x)
-        bot.tap(*_toward(spot, centre, space.f(CLONE_IN + 30)), jitter=2)
-        cast += 1
-        time.sleep(0.1)
-    bot.deploy_spots = good                           # where units really landed (for leftovers)
+        else:
+            break
+
+    bot.deploy_spots = good
     behind = good or sides
-    # the siege machine and the heroes, one each, behind the groups
+
+    # CoC's troop-bar order is troops, then the siege machine (if present), then heroes,
+    # then spells. The plan's hero_count identifies the final N single cards as heroes.
+    hero_count = max(0, min(len(singles), int(plan.get("hero_count", 0) or 0)))
+    hero_start = len(singles) - hero_count
+    activate_hero_abilities = bool(plan.get("activate_hero_abilities", True))
+
+    # Deploy the siege machine and every available hero. If the preferred point fails, _drop
+    # advances through nearby points on the ring rather than giving up on that card.
     for i, cx in enumerate(singles):
+        role = "hero" if i >= hero_start else "siege"
         control.checkpoint()
-        if slot_empty(bot.shot(), cx):
+        current = bot.shot()
+        if no_card(current, cx) and slot_empty(current, cx):
+            log.debug("Skipping genuinely blank single-card slot at %d", cx)
             continue
         _pick(bot, cx)
-        _drop(bot, cx, [behind[i % len(behind)]], centre, single=True, fixes=fixes,
-              reselect=lambda x=cx: _pick(bot, x))
+        preferred = behind[i % len(behind)]
+        candidates = ring or sides
+        alternatives = sorted(
+            (p for p in candidates if p != preferred),
+            key=lambda p: (p[0] - preferred[0]) ** 2 + (p[1] - preferred[1]) ** 2,
+        )
+        deployed = _drop(bot, cx, [preferred] + alternatives, centre, single=True, fixes=fixes,
+                          reselect=lambda x=cx: _pick(bot, x))
+        if deployed:
+            log.info("Single %s card at %d deployed", role, cx)
+            if role == "hero" and activate_hero_abilities:
+                # Reselecting a deployed hero's troop-bar card is the game's ability input.
+                # This is intentionally sent once; ability readiness/use is controlled by CoC.
+                ability_frame = bot.shot()
+                if not no_card(ability_frame, cx):
+                    _pick(bot, cx)
+                    time.sleep(0.12)
+                    log.info("Hero ability input sent for card at %d (not independently state-verified)", cx)
+                else:
+                    log.warning("Hero at card %d deployed, but its ability card is no longer visible", cx)
+        else:
+            log.warning("Could not confirm deployment for single %s card at %d", role, cx)
         time.sleep(0.1)
-    log.debug("Siege machine / heroes: %d card(s) deployed behind %d spot(s)", len(singles), len(behind))
-    # other spells on the troops' way
+    log.info("Attempted deployment for %d siege machine / hero card(s) across %d candidate spot(s)",
+             len(singles), len(ring or sides))
+
+    # Other spells are dropped just inside the successful troop groups.
     for cx, n in spells:
         control.checkpoint()
-        _pick(bot, cx)
-        _drop(bot, cx, [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind], centre, fixes=fixes,
-              reselect=lambda x=cx: _pick(bot, x))
+        frame = bot.shot()
+        count = read_count(frame, cx)
+        if count is None:
+            count = bar_count(frame, cx)
+        if count == 0:
+            log.info("Skipping used-up spell card at %d", cx)
+            continue
+
+        spots = [_toward(p, centre, space.f(CLONE_IN + 60)) for p in behind]
+        _pick(bot, cx)  # select the spell before its first battlefield tap
+        deployed = _drop(bot, cx, spots, centre, fixes=fixes, count_override=count,
+                         reselect=lambda x=cx: _pick(bot, x))
+        if deployed:
+            log.info("Spell card at %d deployed", cx)
+        else:
+            log.warning("Spell card at %d was not confirmed; check troop-bar count / screenshot", cx)
     return [cx for cx, _ in troops]
+
+
+def _land_with_fallback(bot, cx, spot, centre, ring, alternatives=5):
+    """Try the preferred side first, then nearby points on the detected deploy line."""
+    candidates = [spot]
+    if ring:
+        nearby = sorted(
+            (p for p in ring if p != spot),
+            key=lambda p: (p[0] - spot[0]) ** 2 + (p[1] - spot[1]) ** 2,
+        )
+        candidates.extend(nearby[:alternatives])
+    for candidate in candidates:
+        landed = _land(bot, cx, candidate, centre)
+        if landed is not None:
+            return landed
+    return None
 
 
 def _land(bot, cx, spot, centre, tries=4):
@@ -453,7 +604,60 @@ def _land(bot, cx, spot, centre, tries=4):
     return None
 
 
+SPEED_BUTTON_SCALES = [
+    0.75, 0.775, 0.80, 0.825, 0.85, 0.875, 0.90, 0.925, 0.95, 0.975,
+    1.00, 1.025, 1.05, 1.075, 1.10, 1.125, 1.15, 1.175, 1.20,
+]
+SPEED_BUTTON_THRESHOLD = 0.82
+
+
+def _find_speed_button(frame, key):
+    """Find a speed-button template across emulator UI scales in the fixed lower-right region."""
+    match, scale = vision.find_scaled(
+        frame, key, scales=SPEED_BUTTON_SCALES, threshold=0.0
+    )
+    if not match:
+        log.debug("Speed button %s had no template match", key)
+        return None
+    log.debug("Speed button %s best match %.3f (scale %.3f)", key, match.score, scale)
+    return match if match.score >= SPEED_BUTTON_THRESHOLD else None
+
+
+def ensure_four_x(bot, frame=None, timeout=2.5):
+    """Try to enable 4x when the in-battle speed control is visible.
+
+    Returns True if already at 4x / switched successfully, None if the control
+    is not visible yet, and False if a 1x tap was made but could not be verified.
+    """
+    frame = bot.shot() if frame is None else frame
+    four = _find_speed_button(frame, "battle/speed_4x")
+    if four:
+        log.info("Battle speed already at 4x")
+        return True
+
+    one = _find_speed_button(frame, "battle/speed_1x")
+    if not one:
+        log.debug("4x speed control not visible yet")
+        return None
+
+    log.info("Battle speed is 1x; switching to 4x")
+    bot.tap_match(one, jitter=0)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        control.sleep(0.15)
+        frame = bot.shot()
+        if _find_speed_button(frame, "battle/speed_4x"):
+            log.info("Battle speed switched to 4x (verified)")
+            return True
+
+    log.warning("4x speed was not confirmed after the tap; will not tap again this battle")
+    bot.save_error("speed-button-unverified", frame)
+    return False
+
 def deploy(bot, plan):
+    # Count deployment time too, but speed switching waits until the active battle.
+    bot.deploy_started = time.monotonic()
+
     s = bot.settings["loot"]
     smart, verify = s.get("smart_deploy", True), s.get("count_troops", True)
     offsets = plan.get("offsets") or [[0, 0]]
@@ -465,13 +669,13 @@ def deploy(bot, plan):
         n = step.get("slot")
         return slots[n - 1] if n and n <= len(slots) else None
 
-    ring = deployzone.deploy_line(frame) if smart else []
+    ring, detected_centre = deployzone.deploy_geometry(frame) if smart else ([], None)
     if smart and len(ring) < 8:
         log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
         bot.save_error("no-deploy-zone")
         ring = []
     if ring:
-        centre = (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))
+        centre = detected_centre or (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))
     else:
         centre = space.center(deployzone.DIAMOND["cx"], deployzone.DIAMOND["cy"])
 
@@ -484,7 +688,6 @@ def deploy(bot, plan):
 
     fixes = {}                                  # bad spot -> corrected spot, shared by all units
     bot.deploy_spots = []
-    bot.deploy_started = time.monotonic()       # the battle clock starts here (not while reading the base)
     if plan.get("style") == "clone_groups" and verify:
         troops = deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes)
         frame = bot.shot()                      # the troops left over: on the ring where the others landed
@@ -552,10 +755,26 @@ def finish_battle(bot, seconds, started=None, stall=0, watch=("gold", "elixir", 
     3 minutes). Returns True once the results screen is showing."""
     end = (time.monotonic() if started is None else started) + seconds
     left, moved = {}, None                # the loot left in the base, and when it last went down
+    auto_4x = bool(bot.settings.get("loot", {}).get("auto_4x_speed", True))
+    speed_active = False
+    speed_attempted = False
+    last_speed_check = 0.0
     while time.monotonic() < end:
         frame = bot.shot()
         if _results(frame):
             return True
+
+        # The scout countdown has an "End Battle" button and no speed control.
+        # Wait until the actual battle UI (Surrender) is on screen before looking.
+        now = time.monotonic()
+        if auto_4x and not speed_active and not speed_attempted and now - last_speed_check >= 2.0:
+            last_speed_check = now
+            if detect(frame) == "battle":
+                result = ensure_four_x(bot, frame=frame)
+                if result is not None:
+                    speed_attempted = True
+                    speed_active = result
+
         if stall:
             for r in watch:
                 v = vision.digits.read(frame, bot.layout.region(f"scout.{r}"))

@@ -320,6 +320,67 @@
         "type": "spell"
       }
     ],
-    "style": "clone_groups"
+    "style": "clone_groups",
+    "hero_count": 4,
+    "activate_hero_abilities": true,
+    "group_spread": 15
+  },
+  "TH17 - Mass Dragon + Clone": {
+    "description": "Easy air spam: 15 Dragons + 8 Balloons; deploy in 3 groups and cast Clone on the first groups, then heroes, siege and remaining spells",
+    "offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "points": {
+      "spells": [
+        [
+          240,
+          525
+        ],
+        [
+          913,
+          10
+        ],
+        [
+          1708,
+          520
+        ]
+      ]
+    },
+    "style": "clone_groups",
+    "hero_count": 4,
+    "activate_hero_abilities": true,
+    "group_spread": 15
+  },
+  "root_valk": {
+    "description": "Easy ground spam with regular troops only: Root Riders + Valkyries in 3 groups, then heroes, siege and spells; no Super Troops",
+    "offsets": [
+      [
+        0,
+        0
+      ]
+    ],
+    "points": {
+      "spells": [
+        [
+          240,
+          525
+        ],
+        [
+          913,
+          10
+        ],
+        [
+          1708,
+          520
+        ]
+      ]
+    },
+    "style": "clone_groups",
+    "hero_count": 4,
+    "activate_hero_abilities": true,
+    "group_spread": 15
   }
 }

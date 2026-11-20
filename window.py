@@ -1140,13 +1140,16 @@ class Window(QMainWindow):
             check("smart_deploy", lo["smart_deploy"]))
         row(g, "Count troops", "Read each card's count and check that every tap deployed a unit",
             check("count_troops", lo["count_troops"]))
+        row(g, "Auto-enable 4x speed", "During an active battle, switch from 1x to 4x when the control appears. "
+                                      "Turn off when you do not want automatic speed switching.",
+            check("auto_4x_speed", lo.get("auto_4x_speed", True)))
         row(g, "Zoom out before searching", None, check("zoom_out", lo["zoom_out"]))
 
         g = section("Army", "shield", right)
-        g.addWidget(_label("Before the first attack on each account: army screen > the Saved Recipes tab > Use on "
-                           "the top recipe. The game asks to confirm only when the Clan Castle has troops (then "
-                           "Okay). Put your looting army first in each account's Saved Recipes.", "help", wrap=True),
-                    g.rowCount(), 0, 1, 2)
+        g.addWidget(_label("Before the first attack on each account: open Edit Army > My Army > click the "
+                           "dropdown arrow beside Saved Recipes > select the first saved army. Put your looting "
+                           "army first in that dropdown list. The game may ask to confirm when Clan Castle troops "
+                           "are present.", "help", wrap=True), g.rowCount(), 0, 1, 2)
 
         wl = s.get("walls", {})
         g = section("Loot + walls", "shield", right)
@@ -1553,7 +1556,7 @@ class Window(QMainWindow):
         for key in ("stuck_attacks", "max_attacks_per_account", "battle_seconds", "end_when_loot_stops",
                     "max_searches"):
             lo[key] = f[key].value()
-        for key in ("smart_deploy", "count_troops", "zoom_out"):
+        for key in ("smart_deploy", "count_troops", "auto_4x_speed", "zoom_out"):
             lo[key] = f[key].isChecked()
         full, mins = {}, {}
         for r in range(self.th_table.rowCount()):

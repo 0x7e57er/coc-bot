@@ -41,7 +41,8 @@ def setup_logging(debug=False, console=True):
     log.setLevel(logging.DEBUG)
 REQUIRED = ["home/build_button", "home/dark_drop", "attack_menu/find_match", "army/attack_button",
             "army/my_army_title", "army/close", "scout/next", "scout/end_battle", "battle/surrender",
-            "results/return_home", "settings/title", "settings/switch_id", "sid/switch_id_label"]
+            "battle/speed_1x", "battle/speed_4x", "results/return_home", "settings/title",
+            "settings/switch_id", "sid/switch_id_label"]
 
 
 def make_bot(settings, accounts):

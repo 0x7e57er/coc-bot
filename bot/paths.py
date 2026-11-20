@@ -26,8 +26,8 @@ for _d in (CONFIG, LOGS, ERROR_SHOTS):
     os.makedirs(_d, exist_ok=True)
 
 # The one-file executable unpacks read-only files into a temporary _MEIPASS
-# directory. Seed the writable config with the bundled presets on first run,
-# while preserving any attack plans the user has already edited.
+# directory. Seed the writable config with bundled presets on first run,
+# while preserving the user's edited attack plans.
 _BUNDLED_ATTACK_PLANS = os.path.join(RESOURCE_ROOT, "config", "attack_plans.json")
 _USER_ATTACK_PLANS = os.path.join(CONFIG, "attack_plans.json")
 if os.path.isfile(_BUNDLED_ATTACK_PLANS) and not os.path.exists(_USER_ATTACK_PLANS):

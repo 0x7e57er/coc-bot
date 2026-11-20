@@ -74,9 +74,10 @@ DEFAULT_SETTINGS = {
         "smart_deploy": True,               # find the red no-deploy area and drop troops just outside it
         "count_troops": True,               # read each troop count and tap exactly that many times
         "attack_plan": "edrag_clone",       # a plan in config/attack_plans.json
+        "auto_4x_speed": True,               # enable 4x once its control appears during an active battle
         "zoom_out": True,
         "stuck_attacks": 2,                 # resource did not grow after this many attacks -> treat as full
-        # the army: before the first attack of each visit, Saved Recipes -> the first recipe (bot/army.py)
+        # the army: before the first attack of each visit, My Army -> Saved Recipes dropdown -> first entry
     },
     "raid": {
         "attacks": 6,                       # raid attacks per account per Raid Weekend (5, 6 with the bonus)
@@ -140,8 +141,14 @@ _lock = threading.Lock()
 def load_settings():
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH, encoding="utf-8") as f:
-            return _merge(DEFAULT_SETTINGS, json.load(f))
-    return copy.deepcopy(DEFAULT_SETTINGS)
+            settings = _merge(DEFAULT_SETTINGS, json.load(f))
+    else:
+        settings = copy.deepcopy(DEFAULT_SETTINGS)
+
+    # Preserve existing user settings after the Root Rider + Valkyrie plan was renamed.
+    if settings["loot"].get("attack_plan") == "TH17 - Root Rider + Valkyrie":
+        settings["loot"]["attack_plan"] = "root_valk"
+    return settings
 
 
 def save_settings(settings):

@@ -8,7 +8,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -44,15 +44,16 @@ jobs:
             throw "PyInstaller one-file executable not found at $exe"
           }
 
-      # Actions artifacts are downloaded as a ZIP wrapper; extracting it yields only the EXE.
+      # v7 supports a raw single-file artifact. archive:false means the browser download
+      # is the EXE itself, not a ZIP containing it.
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: COC-Bot-Windows-x64
           path: dist/COC-Bot.exe
+          archive: false
           if-no-files-found: error
 
-      # Publish the EXE itself as a release asset, without wrapping it in another ZIP.
+      # Version releases also attach the EXE directly.
       - name: Publish release asset for version tags
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2

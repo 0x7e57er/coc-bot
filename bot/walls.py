@@ -23,6 +23,7 @@ import time
 
 from . import config, loot, upgrade, vision
 from .context import BotError
+from .space import space
 from .control import control
 from .states import go_home
 
@@ -186,10 +187,37 @@ def _asked(text):
     return (int(re.sub(r"\D", "", m.group(1))), m.group(2)) if m else (None, None)
 
 
+def _find_upgrade_more(bot, timeout=5.0):
+    """Find the full Upgrade More button across common emulator interface scales."""
+    scales = (0.80, 0.85, 0.90, 0.928, 0.95, 1.0, 1.05, 1.10, 1.15)
+    region = space.region(450, 650, 1100, 400)
+    end = time.monotonic() + timeout
+    best_score = -1.0
+    while time.monotonic() < end:
+        frame = bot.shot()
+        try:
+            match, scale = vision.find_scaled(
+                frame, "walls/upgrade_more", scales=scales, threshold=0.0, region=region
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            log.error("Walls: cannot load Upgrade More template: %s", exc)
+            bot.save_error("walls-upgrade-more-template", frame)
+            return None
+        if match:
+            best_score = max(best_score, match.score)
+            if match.score >= 0.78:
+                log.debug("Walls: Upgrade More match %.3f at scale %.3f", match.score, scale)
+                return match
+        bot.sleep(0.25)
+    log.warning("Walls: Upgrade More button not recognized (best match %.3f)", best_score)
+    bot.save_error("walls-upgrade-more-not-found")
+    return None
+
+
 def _upgrade_level(bot, row, budget, name):
     """The wall row is tapped: Upgrade More, choose the resource, add the walls its budget pays for, Upgrade, Okay.
     Returns (walls, resource, amount), "busy" (these walls need a builder and none is free) or None."""
-    more = bot.wait("walls/upgrade_more", 4, interval=0.25)
+    more = _find_upgrade_more(bot)
     if not more:
         log.info("Walls: no Upgrade More under the selected wall")
         return None

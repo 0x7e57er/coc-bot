@@ -53,32 +53,21 @@ Then it goes on to the next account. Or:
    - Optional `"full_at": {"elixir": 20000000}`: this account's own full amount, which overrides the
      table.
 
-5. In every account, put your looting army (E-Dragons and Clone spells) **first** in Saved Recipes. The
-   bot presses Use on the top recipe of the Saved Recipes tab before the first attack on each account.
+5. In every account, put your looting army **first** in the Saved Recipes dropdown list. Before the
+   first attack, the bot opens Edit Army > My Army, clicks the arrow beside Saved Recipes and selects the
+   first entry. If no saved recipe can be selected, it keeps the army already loaded in-game.
 
 ## Windows executable
 
-The Windows build is a **single-file executable**: `COC-Bot.exe`. The Python runtime, libraries,
-game image assets and default attack-plan presets are bundled inside it. There is no `_internal`
-folder and no separate runtime files to keep beside the executable.
+The Windows build is a **single-file EXE**. It includes the Python runtime, dependencies, assets, and default attack-plan presets.
 
-- **GitHub Actions:** open Actions -> **Build Windows executable** -> Run workflow. Download the
-  `COC-Bot-Windows-x64` artifact and extract it once; the extracted contents are just
-  `COC-Bot.exe`. Version tags such as `v1.0.0` publish the EXE itself as a release asset.
-- **Locally:** install Python 3.10+ and run `build-windows.bat`. The single executable is created at
-  `dist/COC-Bot.exe`.
+- **GitHub Actions:** open Actions -> **Build Windows executable** -> Run workflow. Download `COC-Bot.exe` directly from the completed run; it is not wrapped in a ZIP.
+- **GitHub Releases:** version tags such as `v1.0.0` publish `COC-Bot.exe` as a direct release asset.
+- **Locally:** install Python 3.10+ and run `build-windows.bat`. The executable is created at `dist/COC-Bot.exe`.
 
-On first launch, the app creates writable `config` and `logs` folders beside the EXE. The default
-attack-plan presets are copied into `config/attack_plans.json` automatically. Put your own
-`config/accounts.json` there (or add accounts in the app) and save settings as usual. Keep those
-folders if you want to preserve your setup and logs; they are runtime data, not extra files required
-to launch the EXE.
+On first launch, the EXE creates writable `config` and `logs` folders beside itself. The bundled default `attack_plans.json` is copied into `config` if it is not already there. Keep your own `config/settings.json` and `config/accounts.json` beside the EXE; these contain your local setup and account names. The runtime unpacks to a temporary directory when launched, so the first startup can take a little longer. No separate `_internal` folder is needed.
 
-The executable is a Windows x64 GUI build. It does not bundle BlueStacks or Android. One-file builds
-take a little longer to start because Windows unpacks the bundled runtime into a temporary folder.
-Install the selected emulator on the target PC. ADB is required only for BlueStacks 5, not Google Play
-Games for PC.
-
+Install the selected emulator on the target PC. ADB is required only for BlueStacks 5, not Google Play Games for PC. The EXE is a Windows x64 GUI build; it does not bundle BlueStacks or Android.
 ## Run
 
 Double-click `run.bat` (or `python main.py`). The window opens maximized. It has a sidebar and a
@@ -142,9 +131,9 @@ python main.py --check              only check the setup, and save what the bot 
 3. **Full?** The bot reads gold, elixir and dark elixir on the village. An account is full when the
    watched resource (elixir by default) reaches `full_at` for its Town Hall in `settings.json`. If
    the storages stop growing for 2 attacks, the account also counts as full.
-4. **Army**: before the first attack: Battle > Edit Army > the **Saved Recipes** tab > **Use** on the first
-   (top) recipe. The game asks to confirm only when the Clan Castle has troops; then the bot presses Okay. If
-   there is no recipe to use, the account attacks with the army it has, and the log says so.
+4. **Army**: before the first attack: Battle > Edit Army > My Army > the dropdown arrow beside
+   **Saved Recipes** > select the first (top) army. The bot handles a Clan Castle confirmation if the game
+   asks. If no recipe can be selected, the account attacks with the army it already has, and the log says so.
 5. **Search**: Attack > Find a Match > Attack!. Then it presses Next until a base has at least the
    `min_loot` for this account's Town Hall. The loot numbers are read with the game's own digit
    images. It gives up after 150 searches.
@@ -152,9 +141,15 @@ python main.py --check              only check the setup, and save what the bot 
    outside the red area. It reads the troop bar by what its cards are, not by their place. Cards with
    an "x11" count left of the heroes are troops; cards without a count are the siege machine and the
    heroes; cards with a count after them are spells; the empty slots are skipped. So any army works.
-   The troops go down in 3 groups (left, top, right), with a Clone cast on each group as it lands. Then
-   the siege machine and every hero go behind the groups, then the other spells on the troops' way.
-   Every tap is checked against the card. A spot that does not deploy is moved and tried again.
+   The troops go down in 3 groups (left, top, right), with a Clone cast on each group as it lands. Each
+   remaining troop tap is checked against the card count before Clone is cast. Then the siege machine and
+   every hero go behind the groups, then the other spells on the troops' way. The fitted building-hull
+   centre, rather than the mean of the deploy points, guides inward/outward retries and group placement.
+   In the normal troop-bar order, the first uncounted card is the siege machine (when present) and the
+   final `hero_count` uncounted cards are heroes. The Clone-group presets use `hero_count: 4`; after a
+   confirmed hero deployment, its card is tapped once more to request the hero ability. The game may
+   ignore that input when the ability is not ready. Set `hero_count` to the number of heroes in that
+   army, or set `activate_hero_abilities: false` to disable ability inputs.
 7. **End**: the battle is surrendered when none of the loot left in the base (gold, elixir and dark
    elixir) has gone down for `end_when_loot_stops` seconds. Troops busy on gold mines still count as
    looting. At the latest it ends after `battle_seconds` (60). Then the bot goes home and starts again from
@@ -348,7 +343,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 | `loot.end_when_loot_stops` | end it sooner when no loot came in for this many seconds (`0` = off) |
 | `loot.smart_deploy` | deploy on a ring just outside the base (else the plan's fixed points) |
 | `loot.count_troops` | read each card's count and check every tap |
-| `loot.attack_plan` | a plan in `attack_plans.json` (`edrag_clone`, `edrag_spread`) |
+| `loot.attack_plan` | a plan in `attack_plans.json` (for example `edrag_clone`, `edrag_spread`, `root_valk`) |
 | `loot.stuck_attacks` | storages not growing after this many attacks = full |
 | `raid.attacks` | raid attacks per account per Raid Weekend (`6`) |
 | `walls.spend` / `walls.keep` | Loot + walls: resources walls may be paid with (gold, elixir) and what is never spent (`500000` each) |
@@ -373,7 +368,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 - `bot/vision.py`: finds images on the screen, reads the game's digits, and reads text (account names).
 - `bot/states.py`: detects which screen the game is on and gets back to the village.
 - `bot/account.py`: switches accounts.
-- `bot/army.py`: the army screen, and the first saved recipe before looting.
+- `bot/army.py`: the army screen, and selecting the first saved army from the Saved Recipes dropdown.
 - `bot/loot.py`: decides when an account is full, searches for a base, attacks, and loots until full.
 - `bot/attack.py`, `bot/deployzone.py`: deploy troops and end the battle.
 - `bot/raid.py`: Clan Capital raids: the airship, the capital army, the districts, deploying, restarting.
