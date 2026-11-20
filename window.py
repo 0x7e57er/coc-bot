@@ -60,8 +60,8 @@ MODE_HELP = {"loot": "Every ticked account attacks until its storages are full",
              "raid_loot": "Each ticked account first uses its raid attacks (on Raid Weekend), then loots until full",
              "loot_upgrade": "Each ticked account starts upgrades with its free builders, loots until full, then "
                              "upgrades again with the loot",
-             "loot_walls": "Each ticked account puts the gold and elixir above what you keep into walls, loots until "
-                           "full, then does it again (cheapest walls first, both resources, Upgrade More)",
+             "loot_walls": "Each ticked account stays until its walls are done: walls with the gold and elixir "
+                           "above what you keep, loot until full, walls, loot ... (cheapest first, both resources)",
              "loot_donate": "Your accounts request troops and the main account donates to them; when its elixir "
                             "runs low it loots until full, and the partner loots too"}
 
@@ -264,6 +264,32 @@ class Glyph(QWidget):
         p = QPainter(self)
         icons.paint_resource(p, self.res, self.rect())
         p.end()
+
+
+class ModeCombo(QComboBox):
+    """What to run: a dropdown with each mode's icon and name (six segmented buttons did not fit one row).
+    value() / set_value() / changed(str) like the segmented control it replaces."""
+    changed = Signal(str)
+
+    def __init__(self, modes):
+        super().__init__()
+        self.setIconSize(QSize(18, 18))
+        self.setMinimumWidth(250)
+        self.setMinimumHeight(36)
+        self.setCursor(Qt.PointingHandCursor)
+        for data, text, ic, colour in modes:
+            self.addItem(icons.icon(ic, colour, 18), text, data)
+        self.currentIndexChanged.connect(lambda _: self.changed.emit(self.value()))
+
+    def value(self):
+        return self.currentData()
+
+    def set_value(self, mode):
+        i = self.findData(mode)
+        if i >= 0 and i != self.currentIndex():
+            self.blockSignals(True)
+            self.setCurrentIndex(i)
+            self.blockSignals(False)
 
 
 class Card(QFrame):
@@ -583,16 +609,18 @@ class Window(QMainWindow):
         run.body.setContentsMargins(18, 12, 18, 12)
         rl = QHBoxLayout()
         rl.setSpacing(14)
-        self.mode = motion.Segmented([(text, icons.icon(ic, colour, 16), data, colour)
-                                      for data, text, ic, colour in MODES])
+        self.mode = ModeCombo(MODES)
+        self.mode.setToolTip("What the bot does when you press Start")
         self.mode.set_value(self.settings.get("mode", "loot"))
         self.mode.changed.connect(self._mode_changed)
         what = QVBoxLayout()
         what.setSpacing(5)
         what.addWidget(_label("WHAT TO RUN", "overline"))
         what.addWidget(self.mode)
-        self.mode_help = _label("", "help")
-        what.addWidget(self.mode_help)
+        self.mode.setMinimumWidth(300)
+        self.mode.setMaximumWidth(340)
+        what.addStretch(1)
+        self.mode_help = _label("", "help", wrap=True)   # under both pickers, the card's whole width
         rl.addLayout(what)
         rl.addSpacing(18)
         start = QVBoxLayout()
@@ -617,6 +645,7 @@ class Window(QMainWindow):
         self.raid_pill = _label("", "pill")
         rl.addWidget(self.raid_pill, 0, Qt.AlignVCenter)
         run.body.addLayout(rl)
+        run.body.addWidget(self.mode_help)
         grid.addWidget(run, 0, 0, 1, 2)
         self._fill_start()
 
@@ -1150,10 +1179,12 @@ class Window(QMainWindow):
 
         wl = s.get("walls", {})
         g = section("Loot + walls", "shield", right)
-        g.addWidget(_label("Before and after looting, the gold and elixir above what you keep go into walls: the "
-                           "cheapest walls first, many at once with the game's Upgrade More. Gold pays for every "
-                           "level, elixir for the higher ones; on a level that takes both, both are used. Okay only "
-                           "when the game asks exactly that amount.", "help", wrap=True), g.rowCount(), 0, 1, 2)
+        g.addWidget(_label("Each account stays until its walls are done: the gold and elixir above what you keep "
+                           "go into walls, it loots until full, walls again, and so on. It moves on when full "
+                           "storages upgrade no wall (all done, waiting for a builder, or one wall costs more) or "
+                           "looting stops. Cheapest walls first, many at once with Upgrade More; gold pays for every "
+                           "level, elixir for the higher ones. Okay only when the game asks exactly that amount.",
+                           "help", wrap=True), g.rowCount(), 0, 1, 2)
         wpay = QWidget()
         wp = QHBoxLayout(wpay)
         wp.setContentsMargins(0, 0, 0, 0)

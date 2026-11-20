@@ -7,8 +7,8 @@ accounts in turn and either:
 - **Capital raid**: uses its Clan Capital raid attacks (Raid Weekend only);
 - **Raid + loot**: does both, raid attacks first;
 - **Loot + upgrade**: starts upgrades with its free builders, loots until full, then upgrades again;
-- **Loot + walls**: puts the gold and elixir above what you keep into walls (both resources), loots until
-  full, then does it again.
+- **Loot + walls**: stays on each account until its walls are done: walls with the gold and elixir above
+  what you keep (both resources), loot until full, walls, loot until full, ...
 
 Then it goes on to the next account. Or:
 
@@ -201,9 +201,19 @@ that account again until the first one is done.
 
 ## Loot + walls
 
-Each ticked account first puts what is already above what you keep into walls (room for the loot), loots
-until full, then does it again. What may be spent is set in **Loot settings > Loot + walls**: pay with gold /
-elixir, always keep 5 lakh of each. Walls go cheapest first, with **both** resources:
+Each ticked account stays until its walls are done: first what is already above what you keep goes into
+walls (room for the loot), then it loots until full, walls again, loots until full, walls again, and so on.
+It goes on to the next account when:
+
+- full storages upgrade no wall: every wall is upgraded, the next walls wait for a free builder, or one wall
+  costs more than the storages hold above the keep (the log says which);
+- looting stops: no army, the attack limit, no gold to search, or the account could not be opened.
+
+There is no limit on the rounds: an account whose walls keep upgrading keeps looting.
+
+An account whose Build list showed no wall is not opened for walls again for 12 hours (a new Town Hall level
+brings new walls). What may be spent is set in **Loot settings > Loot + walls**: pay with gold / elixir,
+always keep 5 lakh of each. Walls go cheapest first, with **both** resources:
 
 - gold pays for every wall level; the higher levels also take elixir (two Upgrade buttons, same price);
 - on a level that takes both, the resource that pays for more walls goes first, then the other one pays for the

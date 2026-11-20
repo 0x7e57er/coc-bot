@@ -31,6 +31,7 @@ log = logging.getLogger("bot")
 
 PAY = ("gold", "elixir")    # walls are paid with gold (all levels) or elixir (the higher levels)
 MAX_BATCHES = 20            # Upgrade More batches in one visit at most
+ALL_DONE_FOR = 12 * 3600    # an account whose Build list shows no wall is looked at again after this long
 TITLE_ABOVE = 290           # the "Wall (Level 1) x 11" title is this far above the Upgrade buttons
 
 
@@ -181,10 +182,19 @@ def _builders_busy(bot, name, cost, x):
              name, f"{need[name]:,}", upgrade._span(wait))
 
 
+def _all_done(bot, name):
+    """The Build list showed no wall at all in the last 12 hours (every wall is at its highest level)."""
+    checked = bot.state.get("walls_checked", {}).get(name, 0)
+    return (name in bot.state.get("walls_levels", {}) and not _levels(bot, name)
+            and time.time() - checked < ALL_DONE_FOR)
+
+
 def _worth(bot, name, budget):
     """Does the gold / elixir above what is kept pay for one wall the account had at its last visit (one whose
     builder is free)? True when its walls are not known yet."""
     levels = _levels(bot, name)
+    if _all_done(bot, name):
+        return False
     if not levels:
         return max(budget.values(), default=0) > 0
     return any(_payable(levels, budget, c) and not _waits(bot, name, c) for c in levels)
@@ -341,6 +351,7 @@ def spend(bot, account):
     the account had last time does not open it at all."""
     s = bot.settings.get("walls", {})
     name = account["name"]
+    bot.walls_note = "no wall could be upgraded"
     if not go_home(bot):
         raise BotError("Not on the home village")
     bot.action = "Walls: reading storages"
@@ -351,8 +362,9 @@ def spend(bot, account):
         levels = _levels(bot, name)
         costs = ", ".join(f"{c:,} ({'/'.join(rs) if rs else '?'}{', waits for a builder' if _waits(bot, name, c) else ''})"
                           for c, rs in levels.items())
-        log.info("%s: nothing above what is kept pays for a wall that can be upgraded now (can spend %s; walls cost %s)",
-                 name, loot._fmt(budget), costs)
+        bot.walls_note = ("every wall is upgraded" if _all_done(bot, name) else
+                          "nothing above what is kept pays for a wall that can be upgraded now")
+        log.info("%s: %s (can spend %s; walls cost %s)", name, bot.walls_note, loot._fmt(budget), costs or "-")
         return 0
     x = upgrade.open_panel(bot)
     done = batches = 0
@@ -360,17 +372,25 @@ def spend(bot, account):
         bot.action = "Walls: reading the Build list"
         rows = sorted(wall_rows(bot, x), key=lambda r: r["cost"])
         _remember(bot, name, costs=[r["cost"] for r in rows])
+        bot.state.setdefault("walls_checked", {})[name] = time.time()
+        config.save_state(bot.state)
+        if not rows:
+            bot.walls_note = "every wall is upgraded (no wall in the Build list)"
         levels = _levels(bot, name)
         log.info("%s: walls %s; can spend %s", name,
                  ", ".join(f"{r['count']} at {r['cost']:,} ({'/'.join(levels.get(r['cost']) or ['?'])})"
                            for r in rows) or "none listed", loot._fmt(budget))
         for row in rows:
             if row["cost"] > max(budget.values(), default=0):
+                if not done:
+                    bot.walls_note = (f"the next walls cost {row['cost']:,} each - more than what is above the "
+                                      f"keep ({loot._fmt(budget)})")
                 break                                        # (sorted: the others cost more)
             wait = _waits(bot, name, row["cost"])
             if wait:
                 log.info("%s: walls of %s and up wait for a free builder (%s)", name, f"{row['cost']:,}",
                          upgrade._span(wait))
+                bot.walls_note = f"walls of {row['cost']:,} and up wait for a free builder ({upgrade._span(wait)})"
                 break
             left = row["count"]
             for _ in PAY:                                    # one batch per resource at most
@@ -393,6 +413,7 @@ def spend(bot, account):
                 x = upgrade._panel(bot.shot()) or upgrade.open_panel(bot)
                 if got == "busy":
                     _builders_busy(bot, name, found["cost"], x)
+                    bot.walls_note = f"walls of {found['cost']:,} and up wait for a free builder"
                     break
                 if not got:
                     break
