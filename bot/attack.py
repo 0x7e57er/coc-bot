@@ -192,7 +192,7 @@ def _label(frame, cx):
     return frame[y:y + space.s(50), max(0, cx - space.s(12)):cx + space.s(54)].astype(np.int16)
 
 
-def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count_override=None):
+def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count_override=None, quantity=None):
     """Drop every unit on the card at cx, checking that each tap really deployed one.
 
     Returns True only when the card was observed to change / empty, False if no deployment
@@ -222,7 +222,17 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
     moves = {}
     count = count_override if count_override is not None else (None if single else read_count(frame, cx))
     by_count = count is not None
-    left = count if by_count else 1
+    if quantity is not None:
+        quantity = max(0, int(quantity))
+        if quantity == 0:
+            return True
+        if not by_count:
+            log.warning("Cannot safely deploy a limited group from card %d: its count is unreadable", cx)
+            return False
+        left = min(count, quantity)
+    else:
+        left = count if by_count else 1
+    deployed = 0
     queue = _spread(spots, left)
     tries, max_tries = 0, left * 2 + 10
     while left > 0 and queue and tries < max_tries:
@@ -242,11 +252,22 @@ def _drop(bot, cx, spots, centre, single=False, fixes=None, reselect=None, count
                 return True
             if by_count:
                 now = read_count(frame, cx)
-                if now is not None and now < left:
-                    left, ok = now, True
-                    break
+                if quantity is None:
+                    if now is not None and now < left:
+                        left, ok = now, True
+                        break
+                else:
+                    # A group is only part of the whole card: compare with its absolute
+                    # count before this group, not with the group's smaller target.
+                    expected = count - deployed
+                    if now is not None and now < expected:
+                        used = max(1, expected - now)
+                        deployed += used
+                        left = max(0, left - used)
+                        ok = True
+                        break
                 if now is None and np.abs(_label(frame, cx) - label0).mean() > 10:
-                    left, ok = left - 1, True
+                    left, deployed, ok = left - 1, deployed + 1, True
                     break
             elif np.abs(_card(frame, cx) - card0).mean() > 12:
                 good.append((x, y))
@@ -440,13 +461,26 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
         if spot is None:
             log.info("No usable spot near %s: its %d unit(s) remain for the later ring drop", preferred, n)
             continue
-        good.append(spot)
+        # _land_with_fallback() already confirmed the first unit. Verify each remaining
+        # unit in this group before using Clone; never rely on an unchecked tap burst.
         tx, ty = centre[1] - spot[1], spot[0] - centre[0]
         d = math.hypot(tx, ty) or 1.0
+        group_spots = []
         for i in range(1, n):
-            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.f(GROUP_SPREAD)
-            bot.tap(int(spot[0] + tx / d * k), int(spot[1] + ty / d * k), jitter=2)
-            time.sleep(0.07)
+            k = ((i + 1) // 2) * (1 if i % 2 else -1) * space.f(
+                float(plan.get("group_spread", GROUP_SPREAD))
+            )
+            group_spots.append((int(spot[0] + tx / d * k), int(spot[1] + ty / d * k)))
+        group_complete = True
+        if group_spots:
+            group_complete = _drop(
+                bot, cx, group_spots, centre, fixes=fixes, quantity=n - 1,
+                reselect=lambda x=cx: _pick(bot, x),
+            )
+        if not group_complete:
+            log.warning("Troop group at %s was only partially confirmed; Clone will still be aimed at the landed group",
+                        spot)
+        good.append(spot)
         if clone_x is not None and cast < clones:
             time.sleep(0.15)
             if _cast_one_spell(bot, clone_x, spot, f"Clone {cast + 1}/{clones}"):
@@ -463,9 +497,16 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
     bot.deploy_spots = good
     behind = good or sides
 
+    # CoC's troop-bar order is troops, then the siege machine (if present), then heroes,
+    # then spells. The plan's hero_count identifies the final N single cards as heroes.
+    hero_count = max(0, min(len(singles), int(plan.get("hero_count", 0) or 0)))
+    hero_start = len(singles) - hero_count
+    activate_hero_abilities = bool(plan.get("activate_hero_abilities", True))
+
     # Deploy the siege machine and every available hero. If the preferred point fails, _drop
-    # advances through nearby points on the ring rather than giving up on that hero.
+    # advances through nearby points on the ring rather than giving up on that card.
     for i, cx in enumerate(singles):
+        role = "hero" if i >= hero_start else "siege"
         control.checkpoint()
         current = bot.shot()
         if no_card(current, cx) and slot_empty(current, cx):
@@ -481,9 +522,19 @@ def deploy_clone_groups(bot, plan, frame, slots, ring, centre, fixes):
         deployed = _drop(bot, cx, [preferred] + alternatives, centre, single=True, fixes=fixes,
                           reselect=lambda x=cx: _pick(bot, x))
         if deployed:
-            log.info("Single siege / hero card at %d deployed", cx)
+            log.info("Single %s card at %d deployed", role, cx)
+            if role == "hero" and activate_hero_abilities:
+                # Reselecting a deployed hero's troop-bar card is the game's ability input.
+                # This is intentionally sent once; ability readiness/use is controlled by CoC.
+                ability_frame = bot.shot()
+                if not no_card(ability_frame, cx):
+                    _pick(bot, cx)
+                    time.sleep(0.12)
+                    log.info("Hero ability input sent for card at %d (not independently state-verified)", cx)
+                else:
+                    log.warning("Hero at card %d deployed, but its ability card is no longer visible", cx)
         else:
-            log.warning("Could not confirm deployment for single siege / hero card at %d", cx)
+            log.warning("Could not confirm deployment for single %s card at %d", role, cx)
         time.sleep(0.1)
     log.info("Attempted deployment for %d siege machine / hero card(s) across %d candidate spot(s)",
              len(singles), len(ring or sides))
@@ -614,13 +665,13 @@ def deploy(bot, plan):
         n = step.get("slot")
         return slots[n - 1] if n and n <= len(slots) else None
 
-    ring = deployzone.deploy_line(frame) if smart else []
+    ring, detected_centre = deployzone.deploy_geometry(frame) if smart else ([], None)
     if smart and len(ring) < 8:
         log.info("Deploy zone not found (%d points); using the plan's points", len(ring))
         bot.save_error("no-deploy-zone")
         ring = []
     if ring:
-        centre = (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))
+        centre = detected_centre or (int(np.mean([p[0] for p in ring])), int(np.mean([p[1] for p in ring])))
     else:
         centre = space.center(deployzone.DIAMOND["cx"], deployzone.DIAMOND["cy"])
 

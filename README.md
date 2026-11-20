@@ -141,9 +141,15 @@ python main.py --check              only check the setup, and save what the bot 
    outside the red area. It reads the troop bar by what its cards are, not by their place. Cards with
    an "x11" count left of the heroes are troops; cards without a count are the siege machine and the
    heroes; cards with a count after them are spells; the empty slots are skipped. So any army works.
-   The troops go down in 3 groups (left, top, right), with a Clone cast on each group as it lands. Then
-   the siege machine and every hero go behind the groups, then the other spells on the troops' way.
-   Every tap is checked against the card. A spot that does not deploy is moved and tried again.
+   The troops go down in 3 groups (left, top, right), with a Clone cast on each group as it lands. Each
+   remaining troop tap is checked against the card count before Clone is cast. Then the siege machine and
+   every hero go behind the groups, then the other spells on the troops' way. The fitted building-hull
+   centre, rather than the mean of the deploy points, guides inward/outward retries and group placement.
+   In the normal troop-bar order, the first uncounted card is the siege machine (when present) and the
+   final `hero_count` uncounted cards are heroes. The Clone-group presets use `hero_count: 4`; after a
+   confirmed hero deployment, its card is tapped once more to request the hero ability. The game may
+   ignore that input when the ability is not ready. Set `hero_count` to the number of heroes in that
+   army, or set `activate_hero_abilities: false` to disable ability inputs.
 7. **End**: the battle is surrendered when none of the loot left in the base (gold, elixir and dark
    elixir) has gone down for `end_when_loot_stops` seconds. Troops busy on gold mines still count as
    looting. At the latest it ends after `battle_seconds` (60). Then the bot goes home and starts again from
@@ -337,7 +343,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 | `loot.end_when_loot_stops` | end it sooner when no loot came in for this many seconds (`0` = off) |
 | `loot.smart_deploy` | deploy on a ring just outside the base (else the plan's fixed points) |
 | `loot.count_troops` | read each card's count and check every tap |
-| `loot.attack_plan` | a plan in `attack_plans.json` (`edrag_clone`, `edrag_spread`) |
+| `loot.attack_plan` | a plan in `attack_plans.json` (for example `edrag_clone`, `edrag_spread`, `root_valk`) |
 | `loot.stuck_attacks` | storages not growing after this many attacks = full |
 | `raid.attacks` | raid attacks per account per Raid Weekend (`6`) |
 | `walls.spend` / `walls.keep` | Loot + walls: resources walls may be paid with (gold, elixir) and what is never spent (`500000` each) |
