@@ -53,7 +53,9 @@ DEFAULT_SETTINGS = {
         "adb_path": "",                     # "" = adb on PATH, else BlueStacks' own HD-Adb.exe
     },
     "mode": "loot",                         # "loot" / "raid" (Clan Capital raids) / "raid_loot" (raids, then loot)
-    #                                         / "loot_donate" (the main account donates to your accounts' requests)
+    #                                         / "loot_donate" (1 PC: main donates & loots, others request)
+    #                                         / "donate_only" (PC 1: main donates & loots only)
+    #                                         / "request_only" (PC 2: requesting accounts request only)
     #                                         / "loot_upgrade" (loot, and start upgrades with the free builders)
     #                                         / "loot_walls" (loot until full, then put the loot into walls)
     "start_from": 1,                        # account # (in accounts.json) the run starts with; follows the run
@@ -98,6 +100,7 @@ DEFAULT_SETTINGS = {
         "request_top": 30,                  # the top this many accounts of the list take part: 30 = the main
         #                                     account and the 29 below it request (ticks do not matter)
         "need": 4000000,                    # elixir the main account needs for a round of donations (40 lakh)
+        "poll_seconds": 15,                 # 2-PC Donor mode: seconds between chat checks when no request was filled
         "empty_cc": True,                   # empty the Clan Castle before requesting
         "only_mine": False,                 # donate only to requests from your own accounts
         "big_template": "donate/super_wizard",   # in colour in the donate window = a big request

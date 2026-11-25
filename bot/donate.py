@@ -94,10 +94,13 @@ def _timer(bot, tries=4):
 def request(bot):
     """Send a reinforcement request (the army screen is open). Returns the cooldown it started (seconds, 0 when
     it could not be read), or None when no request was sent."""
+    bot._cooldown_seen = None
     frame = bot.shot()
     if vision.find(frame, "army/request_cooldown", any_brightness=True):
         secs = _timer(bot, tries=2)
         if not secs or secs > WAIT_COOLDOWN:
+            if secs:
+                bot._cooldown_seen = secs
             log.info("Request is on cooldown%s (never paying gems to skip it)",
                      f" for {secs // 60}m {secs % 60}s" if secs else "")
             return None
@@ -364,9 +367,12 @@ def _norm(text):
 
 def _is_mine(bot, name):
     """A request from one of your accounts: its name is an account's name or its in-game name (read when the bot
-    opened it)."""
+    opened it, or set as "player" in accounts.json)."""
     same = account_actions.same_name
-    return any(same(a["name"], name) or (a.get("_player") and same(a["_player"], name)) for a in bot.accounts)
+    return any(same(a["name"], name)
+               or (a.get("player") and same(a["player"], name))
+               or (a.get("_player") and same(a["_player"], name))
+               for a in bot.accounts)
 
 
 def donate_all(bot, max_requests=60):
@@ -454,7 +460,8 @@ def donate_all(bot, max_requests=60):
     finally:
         close_chat(bot)
         go_home(bot)
-    log.info("Donating done: %d unit(s) to %d request(s)", total, handled)
+    log.log(logging.INFO if total or handled else logging.DEBUG,
+            "Donating done: %d unit(s) to %d request(s)", total, handled)
     return total, handled
 
 
@@ -469,13 +476,25 @@ def roles(bot):
     """(main, partner, requesters): the main account donates; the partner loots with it and requests first; then
     the other accounts of the top "request_top" of the list request too (ticks do not matter here)."""
     d = bot.settings["donate"]
-    main = _account(bot, d.get("main", 1))
-    partner = _account(bot, d.get("partner", 2))
+    main_pos = d.get("main", 1)
+    partner_pos = d.get("partner", 2)
+    main = _account(bot, 1 if main_pos is None else main_pos)
+    partner = _account(bot, 0 if partner_pos is None else partner_pos)
     if partner is main:
         partner = None
     top = int(d.get("request_top", 30) or 0) or len(bot.accounts)
     others = [a for a in bot.accounts[:top] if a is not main and a is not partner]
     return main, partner, ([partner] if partner else []) + others
+
+
+def requesters_only(bot):
+    """2-PC Requester mode: accounts in the top "request_top" of the list, excluding the main donor account
+    if it is in this list (set donate.main = 0 if the donor account is not in accounts.json)."""
+    d = bot.settings["donate"]
+    main_pos = d.get("main", 1)
+    main = _account(bot, 1 if main_pos is None else main_pos)
+    top = int(d.get("request_top", 30) or 0) or len(bot.accounts)
+    return [a for a in bot.accounts[:top] if a is not main]
 
 
 def _status(bot, acc, status, **extra):
@@ -537,7 +556,13 @@ def request_round(bot, requesters, state):
             continue
         secs = with_recovery(bot, f"request on {name}", lambda a=acc: request_turn(bot, a))
         if secs is None:
-            _status(bot, acc, "no_clan" if acc.get("_no_clan") else "not_requested")
+            seen = getattr(bot, "_cooldown_seen", None)
+            if seen and seen > WAIT_COOLDOWN:
+                requested_at[name] = time.time() - max(0, (state.get("cooldown") or 600) - seen)
+                _status(bot, acc, "cooldown")
+                config.save_state(bot.state)
+            else:
+                _status(bot, acc, "no_clan" if acc.get("_no_clan") else "not_requested")
             continue
         sent += 1
         requested_at[name] = time.time()
@@ -625,3 +650,88 @@ def run(bot):
             log.info("Nothing was requested or donated: waiting a minute before the next round")
             bot.action = "Waiting: nothing to request or donate"
             control.sleep(60)
+
+
+def run_donor(bot):
+    """2-PC Donor PC: stays on the main account, keeps donating to open clan requests, and loots until full
+    whenever its elixir drops below `donate.need` (then immediately donates again)."""
+    from .runner import loot_account
+    main, _, _ = roles(bot)
+    if main is None:
+        raise RuntimeError("Donate + loot (PC 1): the main account # is not in the account list")
+    d = bot.settings["donate"]
+    need = int(d.get("need", 4_000_000) or 0)
+    poll = max(3, int(d.get("poll_seconds", 15) or 15))
+    log.info("Donate + loot (PC 1): %s donates and loots (minimum elixir %s, check requests every %ds)",
+             main["name"], f"{need:,}", poll)
+    looted, rounds = False, 0
+    while True:
+        control.checkpoint()
+        if not looted:
+            elixir = main_elixir(bot, main)
+            if elixir is None:
+                log.warning("%s: the elixir could not be read - checking requests anyway", main["name"])
+            elif elixir < need:
+                log.info("%s has %s elixir, needs %s: looting until full",
+                         main["name"], f"{elixir:,}", f"{need:,}")
+                loot_account(bot, main)
+                result = bot.progress.get(main["name"], {}).get("status")
+                if result in LOOT_FAILED:
+                    log.warning("%s could not loot (%s): trying again in %d min", main["name"], result,
+                                RETRY_LOOT // 60)
+                    bot.action = "Waiting: the main account could not loot"
+                    control.sleep(RETRY_LOOT)
+                    continue
+                looted = True
+                continue
+            else:
+                log.debug("%s has %s elixir (needs %s)", main["name"], f"{elixir:,}", f"{need:,}")
+        looted = False
+        rounds += 1
+        units = donate_round(bot, main)
+        if units > 0:
+            log.info("Donation pass %d: %d unit(s) donated", rounds, units)
+            bot.action = "Waiting briefly before checking requests"
+            control.sleep(3)
+        else:
+            bot.action = f"Waiting {poll}s for new troop requests"
+            control.sleep(poll)
+
+
+def run_requester(bot):
+    """2-PC Requester PC: loops continuously over the requesting accounts, emptying their Clan Castle and
+    requesting troops only (never loots or donates). If the donor PC is busy looting, unfilled previous
+    requests are simply wiped/replaced when the next request is sent."""
+    requesters = requesters_only(bot)
+    if not requesters:
+        raise RuntimeError("Request only (PC 2): no account to request troops (set Main account to 'None' if "
+                           "the donor account is not in this list, or raise 'Request troops from the top')")
+    state = bot.state.setdefault("donate", {})
+    log.info("Request only (PC 2): requesting on %d account(s): %s",
+             len(requesters), ", ".join(a["name"] for a in requesters))
+    rounds = 0
+    while True:
+        control.checkpoint()
+        eligible = [a for a in requesters if not a.get("_no_clan")]
+        if not eligible:
+            log.warning("No requesting account is in a clan: waiting 60s")
+            bot.action = "Waiting: no account in a clan"
+            control.sleep(60)
+            continue
+        soonest = min((_cooldown_left(a, state) for a in eligible), default=0.0)
+        wait = soonest - SWITCH_SECS
+        if wait > WAIT_COOLDOWN:
+            log.info("All requesting accounts on cooldown: waiting %dm %ds for next request",
+                     int(wait) // 60, int(wait) % 60)
+            bot.action = f"Waiting for request cooldown ({int(wait // 60)}m {int(wait % 60)}s)"
+            control.sleep(wait)
+        rounds += 1
+        sent = request_round(bot, requesters, state)
+        log.info("Request round %d: %d request(s) sent", rounds, sent)
+        if not sent:
+            eligible = [a for a in requesters if not a.get("_no_clan")]
+            soonest = min((_cooldown_left(a, state) for a in eligible), default=0.0)
+            if soonest - SWITCH_SECS <= WAIT_COOLDOWN:
+                log.info("Nothing was requested: waiting 30s before the next round")
+                bot.action = "Waiting: nothing could be requested"
+                control.sleep(30)

@@ -118,7 +118,8 @@ def loot_account(bot, acc):
 
 
 MODES = {"loot": "Loot all accounts", "raid": "Clan Capital raids", "raid_loot": "Raids, then loot",
-         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "Loot + donate"}
+         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "Loot + donate (1 PC)",
+         "donate_only": "Donate + loot (PC 1)", "request_only": "Request only (PC 2)"}
 
 
 def raid_account(bot, acc):
@@ -208,6 +209,12 @@ def run_accounts(bot, start_from=1, rounds=1, mode="loot"):
     from there) and is back at 1 after a whole round."""
     if mode == "loot_donate":
         donate.run(bot)                                # its own cycle, always from the main account
+        return
+    if mode == "donate_only":
+        donate.run_donor(bot)                          # 2-PC Donor PC: donates & loots main account only
+        return
+    if mode == "request_only":
+        donate.run_requester(bot)                      # 2-PC Requester PC: requests only in a loop
         return
     order = [(i, a) for i, a in enumerate(bot.accounts, 1) if a.get("enabled", True)]
     if not order:

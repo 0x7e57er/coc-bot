@@ -54,7 +54,10 @@ RESOURCES = config.RESOURCES
 MODES = [("loot", "Loot", "swords", GREEN), ("raid", "Capital raid", "castle", ORANGE),
          ("raid_loot", "Raid + loot", "bolt", BLUE), ("loot_upgrade", "Loot + upgrade", "arrow-up", GOLD),
          ("loot_walls", "Loot + walls", "shield", AMBER),
-         ("loot_donate", "Loot + donate", "users", ELIXIR)]
+         ("loot_donate", "Loot + donate (1 PC)", "users", ELIXIR),
+         ("donate_only", "Donate + loot (PC 1)", "users", ELIXIR),
+         ("request_only", "Request only (PC 2)", "flag", BLUE)]
+DONATE_MODES = ("loot_donate", "donate_only", "request_only")
 MODE_HELP = {"loot": "Every ticked account attacks until its storages are full",
              "raid": "Every ticked account uses its Clan Capital raid attacks (Raid Weekend only)",
              "raid_loot": "Each ticked account first uses its raid attacks (on Raid Weekend), then loots until full",
@@ -62,8 +65,12 @@ MODE_HELP = {"loot": "Every ticked account attacks until its storages are full",
                              "upgrades again with the loot",
              "loot_walls": "Each ticked account stays until its walls are done: walls with the gold and elixir "
                            "above what you keep, loot until full, walls, loot ... (cheapest first, both resources)",
-             "loot_donate": "Your accounts request troops and the main account donates to them; when its elixir "
-                            "runs low it loots until full, and the partner loots too"}
+             "loot_donate": "1 PC: your accounts request troops and the main account donates to them; when its elixir "
+                            "runs low it loots until full, and the partner loots too",
+             "donate_only": "2-PC Donor (PC 1): stays on the main account, keeps donating to open requests, and loots "
+                            "until full when its elixir drops below the threshold (then donates right after)",
+             "request_only": "2-PC Requester (PC 2): keeps requesting troops across the requesting accounts only "
+                             "(never loots or donates; any unfilled previous request is replaced automatically)"}
 
 # an account's status in this run -> (text, colour)
 STATUS = {
@@ -756,6 +763,7 @@ class Window(QMainWindow):
         """A run control, not a setting: saved at once (other unsaved edits stay unsaved)."""
         self.settings["mode"] = mode
         config.save_settings(self.settings)
+        self._fill_dashboard_accounts()
         self._show_mode()
         self.note(f"Mode: {runner.MODES.get(mode, mode)}")
 
@@ -765,14 +773,19 @@ class Window(QMainWindow):
         self.side_mode.setText(runner.MODES.get(mode, mode))
         colour = next((c for d, _, _, c in MODES if d == mode), BLUE)
         self.shimmer.set_color(colour)
-        donating = mode == "loot_donate"
+        donating = mode in DONATE_MODES
         self.start_combo.setEnabled(getattr(self, "thread", None) is None and not donating)
-        self.start_hint.setText("Loot + donate always starts on the main account" if donating else
-                                "Moves along as the bot changes account")
+        hints = {"loot_donate": "Loot + donate always starts on the main account",
+                 "donate_only": "Donate + loot (PC 1) always runs on the main account",
+                 "request_only": "Request only (PC 2) cycles through the requesting accounts"}
+        self.start_hint.setText(hints.get(mode, "Moves along as the bot changes account"))
+        self.dash_table.setColumnHidden(3, mode in ("raid", "request_only"))
         self._layout_stats()
 
     STATS = ("attacks", "raids", "searches", "time", "gold", "elixir", "dark", "done")
     STATS_BY_MODE = {"loot_donate": ("attacks", "requests", "donated", "time", "gold", "elixir", "dark", "searches"),
+                     "donate_only": ("attacks", "donated", "searches", "time", "gold", "elixir", "dark", "done"),
+                     "request_only": ("requests", "time"),
                      "loot_upgrade": ("attacks", "upgrades", "searches", "time", "gold", "elixir", "dark", "done"),
                      "loot_walls": ("attacks", "walls", "searches", "time", "gold", "elixir", "dark", "done")}
 
@@ -822,15 +835,39 @@ class Window(QMainWindow):
         w = self.settings["loot"]["watch"]
         return next((r for r in RESOURCES if w.get(r)), "elixir")
 
+    def _dashboard_accounts(self):
+        """[(pos, acc)] shown in the Dashboard table for the current mode."""
+        mode = self.mode.value() if hasattr(self, "mode") else self.settings.get("mode", "loot")
+        if mode not in DONATE_MODES:
+            return [(i, a) for i, a in enumerate(self.accounts, 1) if a.get("enabled", True)]
+        d = self.settings.get("donate", {})
+        main_pos = d.get("main", 1)
+        main_pos = 1 if main_pos is None else int(main_pos)
+        top = int(d.get("request_top", 30) or 0) or len(self.accounts)
+        if mode == "donate_only":
+            return [(main_pos, self.accounts[main_pos - 1])] if 1 <= main_pos <= len(self.accounts) else []
+        if mode == "request_only":
+            return [(i, a) for i, a in enumerate(self.accounts[:top], 1) if i != main_pos]
+        partner_pos = d.get("partner", 2)
+        partner_pos = 0 if partner_pos is None else int(partner_pos)
+        seen, out = set(), []
+        for pos in [main_pos, partner_pos] + list(range(1, min(top, len(self.accounts)) + 1)):
+            if 1 <= pos <= len(self.accounts) and pos not in seen:
+                seen.add(pos)
+                out.append((pos, self.accounts[pos - 1]))
+        return out
+
     def _fill_dashboard_accounts(self):
-        """One row per ticked account (rebuilt when the accounts are saved or a run starts)."""
+        """One row per active account (rebuilt when the accounts, mode, or settings change, or a run starts)."""
         res = self._watch_res()
+        mode = self.mode.value() if hasattr(self, "mode") else self.settings.get("mode", "loot")
         t = self.dash_table
         t.setRowCount(0)
         t.horizontalHeaderItem(3).setText(f"{RES_NAME[res]} / full storage")
+        t.setColumnHidden(3, mode in ("raid", "request_only"))
         self.dash_rows = []
-        enabled = [(i, a) for i, a in enumerate(self.accounts, 1) if a.get("enabled", True)]
-        for pos, acc in enabled:
+        shown = self._dashboard_accounts()
+        for pos, acc in shown:
             r = t.rowCount()
             t.insertRow(r)
             num = QTableWidgetItem(str(pos))
@@ -853,7 +890,7 @@ class Window(QMainWindow):
             cl.addStretch(1)
             t.setCellWidget(r, 4, cell)
             self.dash_rows.append((acc, bar, chip, name))
-        self.dash_count.setText(f"{len(enabled)} ticked")
+        self.dash_count.setText(f"{len(shown)} account(s)" if mode in DONATE_MODES else f"{len(shown)} ticked")
         self.dash_current = None
 
     def _mark_current(self, name):
@@ -1135,22 +1172,24 @@ class Window(QMainWindow):
             return c
 
         g = section("Loot + donate", "users", left)
-        g.addWidget(_label("The main account reads its elixir. With enough for a round, the partner and then the "
-                           "other accounts of the top of the list empty their Clan Castle and request troops, and "
-                           "the main account donates to all of them (Balloons, Archers, Lightning, a Stone Slammer - "
-                           "paid with elixir). Below that the main account loots until full, the partner loots too, "
-                           "and the requests start again. It does not use Start from account.", "help", wrap=True),
+        g.addWidget(_label("1 PC (Loot + donate): the main account donates when its elixir >= threshold while "
+                           "partner and top accounts request; below that it loots and the partner loots too. "
+                           "2 PCs: run 'Donate + loot (PC 1)' on the donor PC (only uses Main account) and "
+                           "'Request only (PC 2)' on the requester PC (skips Main account if set, or set Main "
+                           "account to 'None (other PC)' if PC 2 only lists requesting accounts).", "help", wrap=True),
                     g.rowCount(), 0, 1, 2)
-        row(g, "Main account", "Donates, and loots when its elixir runs low", accounts_combo("donate_main"))
-        row(g, "Partner account", "Always loots with the main account, and requests first",
+        row(g, "Main account", "Donates, and loots when its elixir runs low (PC 1)", accounts_combo("donate_main"))
+        row(g, "Partner account", "1 PC mode only: loots with the main account, and requests first",
             accounts_combo("donate_partner"))
         row(g, "Request troops from the top", "30 = the main account and the 29 accounts below it in the list "
                                                 "(ticks do not matter here)",
-            spin("donate_request_top", int(d.get("request_top", 30) or 30), 2, 500, " accounts"))
+            spin("donate_request_top", int(d.get("request_top", 30) or 30), 1, 500, " accounts"))
         need = spin("donate_need", min(int(d.get("need", 4000000) or 0), 100_000_000), 0, 100_000_000)
         need.setSingleStep(100_000)
         need.setGroupSeparatorShown(True)
         row(g, "Elixir a round needs", "40,00,000 = 40 lakh. Below this the main account loots", need)
+        row(g, "Check requests every (PC 1)", "2-PC Donor mode: wait between clan chat checks when nothing was donated",
+            spin("donate_poll_seconds", int(d.get("poll_seconds", 15) or 15), 3, 300, " s"))
         row(g, "Empty the Clan Castle first", "Before each request, so the castle has room",
             check("donate_empty_cc", d.get("empty_cc", True)))
         row(g, "Donate only to my accounts", "Off: to every open request in the clan chat",
@@ -1303,14 +1342,16 @@ class Window(QMainWindow):
         """The account lists of the Loot + donate card (#position, name)."""
         d = self.settings.get("donate", {})
         names = [(f"#{i}  {a['name']}", i) for i, a in enumerate(self.accounts, 1)]
-        for key, first, value in (("donate_main", None, d.get("main", 1)),
-                                  ("donate_partner", ("No partner", 0), d.get("partner", 2))):
+        main_val = d.get("main", 1)
+        partner_val = d.get("partner", 2)
+        for key, first, value in (("donate_main", ("None (other PC)", 0), 1 if main_val is None else main_val),
+                                  ("donate_partner", ("No partner", 0), 0 if partner_val is None else partner_val)):
             c = self.f[key]
             c.blockSignals(True)
             c.clear()
             for text, data in ([first] if first else []) + names:
                 c.addItem(text, data)
-            c.setCurrentIndex(max(0, c.findData(int(value or 0))))
+            c.setCurrentIndex(max(0, c.findData(int(value))))
             c.blockSignals(False)
 
     # the Loot + upgrade list ------------------------------------------------------------------------------
@@ -1561,11 +1602,13 @@ class Window(QMainWindow):
         u["order"] = f["upgrade_order"].currentData()
         u["list"] = self._upgrade_entries()
         d = s.setdefault("donate", {})
-        d["main"] = int(f["donate_main"].currentData() or 1)
+        main_val = f["donate_main"].currentData()
+        d["main"] = 1 if main_val is None else int(main_val)
         d["partner"] = int(f["donate_partner"].currentData() or 0)
         d.pop("request_to", None)
         d["request_top"] = f["donate_request_top"].value()
         d["need"] = f["donate_need"].value()
+        d["poll_seconds"] = f["donate_poll_seconds"].value()
         d["empty_cc"] = f["donate_empty_cc"].isChecked()
         d["only_mine"] = f["donate_only_mine"].isChecked()
         s["repeat_rounds"] = f["repeat_rounds"].value()
@@ -1615,7 +1658,7 @@ class Window(QMainWindow):
         self.pause_btn.setEnabled(running)
         self.stop_btn.setEnabled(running)
         self.mode.setEnabled(not running)               # what runs is fixed at Start
-        self.start_combo.setEnabled(not running and self.mode.value() != "loot_donate")   # follows the run
+        self.start_combo.setEnabled(not running and self.mode.value() not in DONATE_MODES)   # follows the run
         for i in (1, 2, 3):
             page = self.stack.widget(i)
             page.page.setEnabled(not running)          # read at Start: locked while running
@@ -1624,7 +1667,13 @@ class Window(QMainWindow):
 
     def _launch(self, target, label):
         self.save(quiet=True)
-        if not any(a.get("enabled", True) for a in self.accounts):
+        if self.mode.value() in DONATE_MODES:
+            if not self.accounts:
+                self.note("No accounts are listed on the Accounts page", "WARNING")
+                self.toasts.show("No accounts are listed on the Accounts page", "warning")
+                self._go(1)
+                return
+        elif not any(a.get("enabled", True) for a in self.accounts):
             self.note("No account is ticked on the Accounts page", "WARNING")
             self.toasts.show("No account is ticked on the Accounts page", "warning")
             self._go(1)
@@ -1653,8 +1702,12 @@ class Window(QMainWindow):
     def start(self):
         self.run_kind = "run"
         mode = self.mode.value()
-        where = ("on the main account" if mode == "loot_donate" else
-                 f"from account #{self.start_combo.currentData() or 1}")
+        if mode in ("loot_donate", "donate_only"):
+            where = "on the main account"
+        elif mode == "request_only":
+            where = "on the requesting accounts"
+        else:
+            where = f"from account #{self.start_combo.currentData() or 1}"
         self._launch(lambda s, a: runner.run(s, a, on_bot=self._got_bot),
                      f"{runner.MODES.get(mode, mode)} started {where}")
 
@@ -1708,7 +1761,7 @@ class Window(QMainWindow):
         self._show_learned()
         self.note(f"Run {reason}", "WARNING" if reason == "error" else "INFO")
         kind = {"error": "error", "stopped": "warning"}.get(reason, "success")
-        follows = reason != "error" and self.mode.value() != "loot_donate"
+        follows = reason != "error" and self.mode.value() not in DONATE_MODES
         self.toasts.show(f"Run {reason}" + (f" - the next run starts from account #{self.settings.get('start_from', 1)}"
                                             if follows else ""), kind, 5000)
         if reason == "finished" and getattr(self, "run_kind", "run") == "run":
@@ -1761,18 +1814,18 @@ class Window(QMainWindow):
 
         res = self._watch_res()
         progress = b.progress if b else {}
-        enabled = [a for a in self.accounts if a.get("enabled", True)]
-        done = sum(1 for a in enabled if progress.get(a["name"], {}).get("status") in DONE)
-        self.stat_cards["done"].set(f"{done} / {len(enabled)}")
-        looting = mode != "raid"
+        shown = [a for a, _, _, _ in self.dash_rows]
+        done = sum(1 for a in shown if progress.get(a["name"], {}).get("status") in DONE)
+        self.stat_cards["done"].set(f"{done} / {len(shown)}")
+        looting = mode not in ("raid", "request_only")
         if acc:
-            pos = next((i for i, a in enumerate(enabled, 1) if a["name"] == acc["name"]), None)
+            pos = next((i for i, a in enumerate(shown, 1) if a["name"] == acc["name"]), None)
             self.now_account.setText(acc["name"])
             p = progress.get(acc["name"], {})
             raids = f"   ·   {p['raids']} raid attack(s)" if p.get("raids") else ""
-            where = f"   ·   account {pos} of {len(enabled)}" if pos else ""
-            if mode == "loot_donate":
-                where = f"   ·   {self._donate_role(acc)}"
+            where = f"   ·   account {pos} of {len(shown)}" if pos else ""
+            if mode in DONATE_MODES:
+                where = f"   ·   {self._donate_role(acc, mode)}"
             self.now_meta.setText(f"Town Hall {acc.get('th') or '?'}" + where + raids)
             value = (p.get("res") or {}).get(res)
             self.now_res_title.setText(f"{RES_NAME[res]} towards full storage" if looting else "")
@@ -1780,7 +1833,8 @@ class Window(QMainWindow):
             self.now_bar.setVisible(looting)
         else:
             self.now_account.setText("Starting..." if running else "Not running")
-            self.now_meta.setText(f"{len(enabled)} accounts ticked" + ("" if running else "   ·   press Start"))
+            label = f"{len(shown)} accounts" if mode in DONATE_MODES else f"{len(shown)} accounts ticked"
+            self.now_meta.setText(label + ("" if running else "   ·   press Start"))
             self.now_res_title.setText("")
             self.now_bar.hide()                         # no account yet: no bar
         self.last_row.setVisible(looting)
@@ -1817,8 +1871,12 @@ class Window(QMainWindow):
                 extra = f"{extra}  ·  {ws}" if extra else ws
             chip.set(status, extra)
 
-    def _donate_role(self, acc):
-        """What an account does in Loot + donate."""
+    def _donate_role(self, acc, mode="loot_donate"):
+        """What an account does in the donate modes."""
+        if mode == "donate_only":
+            return "main account: donates and loots"
+        if mode == "request_only":
+            return "requests troops"
         d = self.settings.get("donate", {})
         pos = next((i for i, a in enumerate(self.accounts, 1) if a["name"] == acc["name"]), 0)
         if pos == int(d.get("main", 1) or 0):
