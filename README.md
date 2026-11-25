@@ -12,9 +12,9 @@ accounts in turn and either:
 
 Then it goes on to the next account. Or:
 
-- **Loot + donate (1 PC)**: on one PC, your accounts request troops and your main account donates to
-  them, paying with elixir; when the main account's elixir runs low it loots, and your partner account
-  loots with it.
+- **XpIncrease**: on one PC, your accounts request troops and your main account donates to
+  them, paying with elixir; when the main account's elixir drops below 30 lakh it loots until full,
+  and your partner account loots with it.
 - **2-PC Donate & Request** (`Donate + loot (PC 1)` + `Request only (PC 2)`): run two PCs at the same
   time — PC 1 keeps donating and looting only on the main account, while PC 2 keeps requesting troops
   across your requesting accounts continuously.
@@ -61,7 +61,7 @@ top bar with **Save**, **Check setup** (starts the game and reads the resources,
 attacking), **Start**, **Pause (F9)** and **Stop (F10)**. Its pages:
 
 - **Dashboard**:
-  - **What to run**: Loot, Capital raid, Raid + loot, Loot + upgrade, Loot + walls, Loot + donate (1 PC),
+  - **What to run**: Loot, Capital raid, Raid + loot, Loot + upgrade, Loot + walls, XpIncrease,
     Donate + loot (PC 1), or Request only (PC 2). The choice is saved at once.
   - **Start from account**: the account the run starts with. It follows the run, so it always shows
     the account the bot is on, and after a stop the next run goes on from there. After a whole round
@@ -76,8 +76,8 @@ attacking), **Start**, **Pause (F9)** and **Stop (F10)**. Its pages:
   - Recent activity.
 - **Accounts**: tick, name, Town Hall and an optional own full elixir. You can search, add, remove,
   move and tick all. Keep the game's list order.
-- **Loot settings**: run, when an account is full, choosing a base, Loot + donate, battle, army, Loot +
-  upgrade, Clan Capital raid and device. Each setting is explained under its name.
+- **Loot settings**: run, when an account is full, choosing a base, XpIncrease & 2-PC Donate, battle,
+  army, Loot + upgrade, Clan Capital raid and device. Each setting is explained under its name.
 - **Storage & loot**: full storage and minimum loot per Town Hall.
 - **Log**: the whole log, the log file and the error screenshots. **Every step (detailed)** (the default)
   also shows each step the bot starts ("Step: Searching #3"), each screen it sees and each decision, in
@@ -96,7 +96,7 @@ python main.py --cli                loot every enabled account until full, in th
 python main.py --cli --from 5       start with account #5 of accounts.json
 python main.py --cli --rounds 0     keep going round the accounts forever
 python main.py --cli --mode raid    Clan Capital raids in the console (or loot / raid_loot / loot_upgrade /
-                                    loot_walls / loot_donate / donate_only / request_only)
+                                    loot_walls / xpincrease / donate_only / request_only)
 python main.py --check              only check the setup, and save what the bot sees to logs/check.png
 ```
 
@@ -254,22 +254,22 @@ Each batch:
 
 A batch takes about 10 s. The log shows each level done and the storages before and after.
 
-## Loot + donate (1 PC) and 2-PC mode
+## XpIncrease (1 PC) and 2-PC mode
 
-### Single PC (`Loot + donate (1 PC)`)
+### Single PC (`XpIncrease`)
 
-Set it up in **Loot settings > Loot + donate**: the main account (#1), the partner (#2), how many accounts
-from the top of the list take part ("Request troops from the top": 30 = the main account and the 29 below
-it; ticks do not matter here), and the elixir one round of donations needs (40 lakh). Then choose
-**Loot + donate (1 PC)** on the Dashboard and press Start. It does not use "Start from account".
+Set it up in **Loot settings > XpIncrease & 2-PC Donate**: the main account (#1), the partner (#2), how
+many accounts from the top of the list take part ("Request troops from the top": 30 = the main account and
+the 29 below it; ticks do not matter here), and the elixir trigger limit (`30,00,000` = 30 lakh). Then choose
+**XpIncrease** on the Dashboard and press Start. It does not use "Start from account".
 
 1. The main account is opened and its elixir read.
-2. **Enough elixir**: the partner, then the other accounts of the top 30, in turn:
+2. **Elixir >= 30 lakh**: the partner, then the other accounts of the top 30, in turn:
    army screen (Battle > Edit Army) > the Clan Castle's trash > Okay (empties it) > Request > Send.
 3. The main account is opened again: clan chat > each request's Donate > Balloons for big requests,
    Archers for the room left, Lightning, a Stone Slammer (exactly what fits when the request's room
    can be read). Back to 1.
-4. **Not enough elixir**: the main account loots until full, then the partner loots until full, and
+4. **Elixir below 30 lakh**: the main account loots until full, then the partner loots until full, and
    the requests start again with the partner (step 2).
 
 ### Two PCs at a time (`Donate + loot (PC 1)` + `Request only (PC 2)`)
@@ -297,9 +297,9 @@ simultaneously.
 
 **How 2-PC mode runs:**
 - **PC 1 (`Donate + loot (PC 1)`)**: stays on the main account, checks its elixir, and keeps donating to
-  open requests in clan chat (polling every `Check requests every (PC 1)` seconds, default 15 s). Whenever
-  its elixir drops below `Elixir a round needs`, it loots until full, then immediately goes back to
-  donating.
+  open requests in clan chat (polling every `Check requests every (PC 1)` seconds, default 15 s). After
+  donating, whenever its elixir storage drops below **30 lakh** (`30,00,000`), it loots until full, then
+  immediately goes back to donating, and so on.
 - **PC 2 (`Request only (PC 2)`)**: loops continuously over the requesting accounts, emptying their Clan
   Castle (if enabled) and sending requests. It never loots or donates, and never stops when PC 1 is busy
   looting — any previous unfilled request is automatically wiped/replaced when the account requests again.
@@ -372,7 +372,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 |---|---|
 | `device.bluestacks_instance` | `""` = the main BlueStacks instance; clones are `Pie64_1` ... |
 | `device.adb_path` | `""` = adb on PATH, else BlueStacks' own HD-Adb.exe |
-| `mode` | `"loot"`, `"raid"` (Clan Capital raids), `"raid_loot"` (raids, then loot), `"loot_upgrade"`, `"loot_walls"`, `"loot_donate"` (1 PC), `"donate_only"` (PC 1 donor) or `"request_only"` (PC 2 requester) |
+| `mode` | `"loot"`, `"raid"` (Clan Capital raids), `"raid_loot"` (raids, then loot), `"loot_upgrade"`, `"loot_walls"`, `"loot_donate"` (XpIncrease 1 PC), `"donate_only"` (PC 1 donor) or `"request_only"` (PC 2 requester) |
 | `start_from` | account # the run starts with; it follows the run (where it stopped) |
 | `repeat_rounds` | rounds over all accounts, `0` = forever |
 | `when_done` | once every account is done (not after Stop): `"nothing"`, `"close_game"`, `"close_bluestacks"`, `"close_all"` (BlueStacks and the bot), `"lock"` (close the game, lock the PC) or `"shutdown"` (close the game and BlueStacks, shut the PC down 1 minute later, the bot closes itself; to keep the PC on: `shutdown /a`) |
@@ -394,9 +394,9 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 | `upgrade.keep` | never spent (`gold: 500000`: searching costs gold) |
 | `upgrade.order` | `"game"` (the game's order, unticked ones skipped) or `"mine"` (only ticked, top of the list first) |
 | `upgrade.list` | `[{"name", "on"}]` in your order; buildings it does not name are added at its end (ticked; Town Hall and heroes unticked) |
-| `donate.main` / `donate.partner` | account # of the main account (`1`, donates; `0` = none / on other PC) and its partner (`2`, `0` = none, 1 PC mode only) |
+| `donate.main` / `donate.partner` | account # of the main account (`1`, donates; `0` = none / on other PC) and its partner (`2`, `0` = none, XpIncrease 1 PC only) |
 | `donate.request_top` | the top this many accounts take part (`30` = the main account and 29 requesters) |
-| `donate.need` | elixir the main account needs (`4000000` = 40 lakh); below it, it loots |
+| `donate.need` | elixir trigger limit (`3000000` = 30 lakh); when elixir drops below this, the main account loots |
 | `donate.poll_seconds` | 2-PC Donor mode (`donate_only`): seconds between chat checks when nothing was donated (`15`) |
 | `donate.empty_cc` | empty the Clan Castle before requesting (`true`) |
 | `donate.only_mine` | donate only to requests from your own accounts (`false` = every request) |

@@ -54,7 +54,7 @@ RESOURCES = config.RESOURCES
 MODES = [("loot", "Loot", "swords", GREEN), ("raid", "Capital raid", "castle", ORANGE),
          ("raid_loot", "Raid + loot", "bolt", BLUE), ("loot_upgrade", "Loot + upgrade", "arrow-up", GOLD),
          ("loot_walls", "Loot + walls", "shield", AMBER),
-         ("loot_donate", "Loot + donate (1 PC)", "users", ELIXIR),
+         ("loot_donate", "XpIncrease", "users", ELIXIR),
          ("donate_only", "Donate + loot (PC 1)", "users", ELIXIR),
          ("request_only", "Request only (PC 2)", "flag", BLUE)]
 DONATE_MODES = ("loot_donate", "donate_only", "request_only")
@@ -65,10 +65,10 @@ MODE_HELP = {"loot": "Every ticked account attacks until its storages are full",
                              "upgrades again with the loot",
              "loot_walls": "Each ticked account stays until its walls are done: walls with the gold and elixir "
                            "above what you keep, loot until full, walls, loot ... (cheapest first, both resources)",
-             "loot_donate": "1 PC: your accounts request troops and the main account donates to them; when its elixir "
-                            "runs low it loots until full, and the partner loots too",
+             "loot_donate": "XpIncrease (1 PC): your accounts request troops and the main account donates to them; "
+                            "when its elixir runs below the trigger limit it loots until full, and the partner loots too",
              "donate_only": "2-PC Donor (PC 1): stays on the main account, keeps donating to open requests, and loots "
-                            "until full when its elixir drops below the threshold (then donates right after)",
+                            "until full whenever its elixir drops below the trigger limit (then donates again)",
              "request_only": "2-PC Requester (PC 2): keeps requesting troops across the requesting accounts only "
                              "(never loots or donates; any unfilled previous request is replaced automatically)"}
 
@@ -775,7 +775,7 @@ class Window(QMainWindow):
         self.shimmer.set_color(colour)
         donating = mode in DONATE_MODES
         self.start_combo.setEnabled(getattr(self, "thread", None) is None and not donating)
-        hints = {"loot_donate": "Loot + donate always starts on the main account",
+        hints = {"loot_donate": "XpIncrease always starts on the main account",
                  "donate_only": "Donate + loot (PC 1) always runs on the main account",
                  "request_only": "Request only (PC 2) cycles through the requesting accounts"}
         self.start_hint.setText(hints.get(mode, "Moves along as the bot changes account"))
@@ -1171,23 +1171,23 @@ class Window(QMainWindow):
             self.f[key] = c
             return c
 
-        g = section("Loot + donate", "users", left)
-        g.addWidget(_label("1 PC (Loot + donate): the main account donates when its elixir >= threshold while "
+        g = section("XpIncrease & 2-PC Donate", "users", left)
+        g.addWidget(_label("XpIncrease (1 PC): the main account donates when its elixir >= trigger limit while "
                            "partner and top accounts request; below that it loots and the partner loots too. "
                            "2 PCs: run 'Donate + loot (PC 1)' on the donor PC (only uses Main account) and "
                            "'Request only (PC 2)' on the requester PC (skips Main account if set, or set Main "
                            "account to 'None (other PC)' if PC 2 only lists requesting accounts).", "help", wrap=True),
                     g.rowCount(), 0, 1, 2)
         row(g, "Main account", "Donates, and loots when its elixir runs low (PC 1)", accounts_combo("donate_main"))
-        row(g, "Partner account", "1 PC mode only: loots with the main account, and requests first",
+        row(g, "Partner account", "XpIncrease (1 PC) only: loots with the main account, and requests first",
             accounts_combo("donate_partner"))
         row(g, "Request troops from the top", "30 = the main account and the 29 accounts below it in the list "
                                                 "(ticks do not matter here)",
             spin("donate_request_top", int(d.get("request_top", 30) or 30), 1, 500, " accounts"))
-        need = spin("donate_need", min(int(d.get("need", 4000000) or 0), 100_000_000), 0, 100_000_000)
+        need = spin("donate_need", min(int(d.get("need", 3000000) or 0), 100_000_000), 0, 100_000_000)
         need.setSingleStep(100_000)
         need.setGroupSeparatorShown(True)
-        row(g, "Elixir a round needs", "40,00,000 = 40 lakh. Below this the main account loots", need)
+        row(g, "Loot when elixir goes below", "30,00,000 = 30 lakh. Below this the main account loots until full", need)
         row(g, "Check requests every (PC 1)", "2-PC Donor mode: wait between clan chat checks when nothing was donated",
             spin("donate_poll_seconds", int(d.get("poll_seconds", 15) or 15), 3, 300, " s"))
         row(g, "Empty the Clan Castle first", "Before each request, so the castle has room",

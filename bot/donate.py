@@ -1,12 +1,13 @@
-"""Loot + donate: the main account donates to the requests of your other accounts, paying with elixir.
+"""XpIncrease (Loot + donate) & 2-PC Donate / Request: the main account donates to your accounts' requests,
+paying with elixir.
 
-The cycle (settings "donate"), always starting on the main account (account #1, not "start from"):
-  1. The main account has the elixir a round of donations needs ("need", 40 lakh)? Then the requesting accounts -
-     the partner (#2) first, then the others of the top "request_top" accounts of the list (30: the main account
-     and the 29 below it) - each empty their Clan Castle and request; then the main account donates to all of
-     them. Its elixir is read again: enough -> again.
-  2. Not enough: the main account loots until its storages are full, then the partner loots until full too (the
-     partner always loots with the main one), and the requests start again with the partner.
+1-PC XpIncrease cycle (mode "loot_donate", settings "donate"), always starting on the main account (#1):
+  1. The main account has at least "need" elixir (30 lakh)? Then the requesting accounts - the partner (#2)
+     first, then the others of the top "request_top" accounts of the list (30: the main account and the 29
+     below it) - each empty their Clan Castle and request; then the main account donates to all of them.
+     Its elixir is read again: enough -> again.
+  2. Below "need": the main account loots until its storages are full, then the partner loots until full too
+     (the partner always loots with the main one), and the requests start again with the partner.
 It goes on until it is stopped.
 
 Screens (the PC pictures, like Coc-Bot's; BlueStacks draws some screens smaller, so places inside the chat and
@@ -597,18 +598,18 @@ RETRY_LOOT = 300        # the main account could not loot: tried again after thi
 
 
 def run(bot):
-    """Loot + donate until stopped (see the top of this file)."""
+    """XpIncrease (1 PC) until stopped (see the top of this file)."""
     from .runner import loot_account
     main, partner, requesters = roles(bot)
     if main is None:
-        raise RuntimeError("Loot + donate: the main account # is not in the account list")
-    need = int(bot.settings["donate"].get("need", 4_000_000) or 0)
+        raise RuntimeError("XpIncrease: the main account # is not in the account list")
+    need = int(bot.settings["donate"].get("need", 3_000_000) or 0)
     state = bot.state.setdefault("donate", {})
-    log.info("Loot + donate: %s donates, %s loots with it; requesting: %s; a round needs %s elixir", main["name"],
+    log.info("XpIncrease: %s donates, %s loots with it; requesting: %s; loots below %s elixir", main["name"],
              partner["name"] if partner else "no partner", ", ".join(a["name"] for a in requesters) or "nobody",
              f"{need:,}")
     if not requesters:
-        raise RuntimeError("Loot + donate: no account to request troops (raise 'Request troops from the top')")
+        raise RuntimeError("XpIncrease: no account to request troops (raise 'Request troops from the top')")
     looted, rounds = False, 0
     while True:
         control.checkpoint()
@@ -617,7 +618,7 @@ def run(bot):
             if elixir is None:
                 log.warning("%s: the elixir could not be read - donating anyway", main["name"])
             elif elixir < need:
-                log.info("%s has %s elixir, a round needs %s: looting %s%s until full", main["name"], f"{elixir:,}",
+                log.info("%s has %s elixir (below %s): looting %s%s until full", main["name"], f"{elixir:,}",
                          f"{need:,}", main["name"], f" and {partner['name']}" if partner else "")
                 loot_account(bot, main)
                 result = bot.progress.get(main["name"], {}).get("status")
@@ -632,7 +633,7 @@ def run(bot):
                 looted = True
                 continue
             else:
-                log.info("%s has %s elixir (a round needs %s)", main["name"], f"{elixir:,}", f"{need:,}")
+                log.info("%s has %s elixir (loots below %s)", main["name"], f"{elixir:,}", f"{need:,}")
         looted = False
         wait = _cooldown_left(requesters[0], state) - SWITCH_SECS
         if wait > WAIT_COOLDOWN:
@@ -653,16 +654,17 @@ def run(bot):
 
 
 def run_donor(bot):
-    """2-PC Donor PC: stays on the main account, keeps donating to open clan requests, and loots until full
-    whenever its elixir drops below `donate.need` (then immediately donates again)."""
+    """2-PC Donor PC: stays on the main account, keeps donating to open clan requests, and whenever its
+    elixir storage drops below `donate.need` (default 30 lakh) after donating, loots until full, then
+    donates again, repeating until stopped."""
     from .runner import loot_account
     main, _, _ = roles(bot)
     if main is None:
         raise RuntimeError("Donate + loot (PC 1): the main account # is not in the account list")
     d = bot.settings["donate"]
-    need = int(d.get("need", 4_000_000) or 0)
+    need = int(d.get("need", 3_000_000) or 0)
     poll = max(3, int(d.get("poll_seconds", 15) or 15))
-    log.info("Donate + loot (PC 1): %s donates and loots (minimum elixir %s, check requests every %ds)",
+    log.info("Donate + loot (PC 1): %s donates and loots when elixir < %s (check requests every %ds)",
              main["name"], f"{need:,}", poll)
     looted, rounds = False, 0
     while True:
@@ -672,7 +674,7 @@ def run_donor(bot):
             if elixir is None:
                 log.warning("%s: the elixir could not be read - checking requests anyway", main["name"])
             elif elixir < need:
-                log.info("%s has %s elixir, needs %s: looting until full",
+                log.info("%s has %s elixir (below %s): looting until full",
                          main["name"], f"{elixir:,}", f"{need:,}")
                 loot_account(bot, main)
                 result = bot.progress.get(main["name"], {}).get("status")
@@ -685,7 +687,7 @@ def run_donor(bot):
                 looted = True
                 continue
             else:
-                log.debug("%s has %s elixir (needs %s)", main["name"], f"{elixir:,}", f"{need:,}")
+                log.debug("%s has %s elixir (loots below %s)", main["name"], f"{elixir:,}", f"{need:,}")
         looted = False
         rounds += 1
         units = donate_round(bot, main)

@@ -53,7 +53,7 @@ DEFAULT_SETTINGS = {
         "adb_path": "",                     # "" = adb on PATH, else BlueStacks' own HD-Adb.exe
     },
     "mode": "loot",                         # "loot" / "raid" (Clan Capital raids) / "raid_loot" (raids, then loot)
-    #                                         / "loot_donate" (1 PC: main donates & loots, others request)
+    #                                         / "loot_donate" (XpIncrease 1 PC: main donates & loots, others request)
     #                                         / "donate_only" (PC 1: main donates & loots only)
     #                                         / "request_only" (PC 2: requesting accounts request only)
     #                                         / "loot_upgrade" (loot, and start upgrades with the free builders)
@@ -94,12 +94,12 @@ DEFAULT_SETTINGS = {
         "list": [],                         # [{"name", "on"}] in your order; buildings it does not name are added
         #                                     at its end (ticked; heroes unticked) - see bot/upgrade.py CATALOG
     },
-    "donate": {                             # Loot + donate (bot/donate.py)
+    "donate": {                             # XpIncrease / 2-PC Donate (bot/donate.py)
         "main": 1,                          # account # that donates (and loots when its elixir runs low)
         "partner": 2,                       # account # that always loots with the main one, and requests first
         "request_top": 30,                  # the top this many accounts of the list take part: 30 = the main
         #                                     account and the 29 below it request (ticks do not matter)
-        "need": 4000000,                    # elixir the main account needs for a round of donations (40 lakh)
+        "need": 3000000,                    # elixir trigger limit: below this (30 lakh), the main account loots
         "poll_seconds": 15,                 # 2-PC Donor mode: seconds between chat checks when no request was filled
         "empty_cc": True,                   # empty the Clan Castle before requesting
         "only_mine": False,                 # donate only to requests from your own accounts

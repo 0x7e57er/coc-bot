@@ -118,7 +118,7 @@ def loot_account(bot, acc):
 
 
 MODES = {"loot": "Loot all accounts", "raid": "Clan Capital raids", "raid_loot": "Raids, then loot",
-         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "Loot + donate (1 PC)",
+         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "XpIncrease",
          "donate_only": "Donate + loot (PC 1)", "request_only": "Request only (PC 2)"}
 
 
