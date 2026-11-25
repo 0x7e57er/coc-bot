@@ -13,8 +13,8 @@ accounts in turn and either:
 Then it goes on to the next account. Or:
 
 - **XpIncrease**: on one PC, your accounts request troops and your main account donates to
-  them, paying with elixir; when the main account's elixir drops below 30 lakh it loots until full,
-  and your partner account loots with it.
+  them, paying with elixir; when the main account's elixir drops at least 30 lakh below full storage it
+  loots until full, and your partner account loots with it.
 - **2-PC Donate & Request** (`Donate + loot (PC 1)` + `Request only (PC 2)`): run two PCs at the same
   time — PC 1 keeps donating and looting only on the main account, while PC 2 keeps requesting troops
   across your requesting accounts continuously.
@@ -260,16 +260,16 @@ A batch takes about 10 s. The log shows each level done and the storages before 
 
 Set it up in **Loot settings > XpIncrease & 2-PC Donate**: the main account (#1), the partner (#2), how
 many accounts from the top of the list take part ("Request troops from the top": 30 = the main account and
-the 29 below it; ticks do not matter here), and the elixir trigger limit (`30,00,000` = 30 lakh). Then choose
+the 29 below it; ticks do not matter here), and the drop below full storage (`30,00,000` = 30 lakh). Then choose
 **XpIncrease** on the Dashboard and press Start. It does not use "Start from account".
 
 1. The main account is opened and its elixir read.
-2. **Elixir >= 30 lakh**: the partner, then the other accounts of the top 30, in turn:
+2. **Within 30 lakh of full storage** (`elixir > full - 30,00,000`): the partner, then the other accounts of the top 30, in turn:
    army screen (Battle > Edit Army) > the Clan Castle's trash > Okay (empties it) > Request > Send.
 3. The main account is opened again: clan chat > each request's Donate > Balloons for big requests,
    Archers for the room left, Lightning, a Stone Slammer (exactly what fits when the request's room
    can be read). Back to 1.
-4. **Elixir below 30 lakh**: the main account loots until full, then the partner loots until full, and
+4. **30 lakh or more below full storage** (`elixir <= full - 30,00,000`): the main account loots until full, then the partner loots until full, and
    the requests start again with the partner (step 2).
 
 ### Two PCs at a time (`Donate + loot (PC 1)` + `Request only (PC 2)`)
@@ -296,10 +296,11 @@ simultaneously.
 5. On **PC 2** (Requester): select **Request only (PC 2)** on the Dashboard, and press **Start**.
 
 **How 2-PC mode runs:**
-- **PC 1 (`Donate + loot (PC 1)`)**: stays on the main account, checks its elixir, and keeps donating to
-  open requests in clan chat (polling every `Check requests every (PC 1)` seconds, default 15 s). After
-  donating, whenever its elixir storage drops below **30 lakh** (`30,00,000`), it loots until full, then
-  immediately goes back to donating, and so on.
+- **PC 1 (`Donate + loot (PC 1)`)**: stays on the main account, keeps donating to
+  open requests in clan chat (polling every `Check requests every (PC 1)` seconds, default 15 s). Whenever
+  there are no pending requests to donate and its elixir storage has dropped at least **30 lakh**
+  (`30,00,000`) below full storage (`full_at - 30,00,000`), it loots until full, then immediately goes back
+  to donating, and so on.
 - **PC 2 (`Request only (PC 2)`)**: loops continuously over the requesting accounts, emptying their Clan
   Castle (if enabled) and sending requests. It never loots or donates, and never stops when PC 1 is busy
   looting — any previous unfilled request is automatically wiped/replaced when the account requests again.
@@ -396,7 +397,7 @@ Every problem saves a screenshot in `logs/errors/`. Everything is logged in `log
 | `upgrade.list` | `[{"name", "on"}]` in your order; buildings it does not name are added at its end (ticked; Town Hall and heroes unticked) |
 | `donate.main` / `donate.partner` | account # of the main account (`1`, donates; `0` = none / on other PC) and its partner (`2`, `0` = none, XpIncrease 1 PC only) |
 | `donate.request_top` | the top this many accounts take part (`30` = the main account and 29 requesters) |
-| `donate.need` | elixir trigger limit (`3000000` = 30 lakh); when elixir drops below this, the main account loots |
+| `donate.need` | elixir drop below full storage (`3000000` = 30 lakh); when elixir drops to `full - need` or below (and no requests are pending in 2-PC mode), the main account loots |
 | `donate.poll_seconds` | 2-PC Donor mode (`donate_only`): seconds between chat checks when nothing was donated (`15`) |
 | `donate.empty_cc` | empty the Clan Castle before requesting (`true`) |
 | `donate.only_mine` | donate only to requests from your own accounts (`false` = every request) |

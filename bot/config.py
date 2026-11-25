@@ -99,7 +99,7 @@ DEFAULT_SETTINGS = {
         "partner": 2,                       # account # that always loots with the main one, and requests first
         "request_top": 30,                  # the top this many accounts of the list take part: 30 = the main
         #                                     account and the 29 below it request (ticks do not matter)
-        "need": 3000000,                    # elixir trigger limit: below this (30 lakh), the main account loots
+        "need": 3000000,                    # elixir drop below full storage to trigger looting (30 lakh = full - 30,00,000)
         "poll_seconds": 15,                 # 2-PC Donor mode: seconds between chat checks when no request was filled
         "empty_cc": True,                   # empty the Clan Castle before requesting
         "only_mine": False,                 # donate only to requests from your own accounts

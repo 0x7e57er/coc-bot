@@ -66,9 +66,11 @@ MODE_HELP = {"loot": "Every ticked account attacks until its storages are full",
              "loot_walls": "Each ticked account stays until its walls are done: walls with the gold and elixir "
                            "above what you keep, loot until full, walls, loot ... (cheapest first, both resources)",
              "loot_donate": "XpIncrease (1 PC): your accounts request troops and the main account donates to them; "
-                            "when its elixir runs below the trigger limit it loots until full, and the partner loots too",
-             "donate_only": "2-PC Donor (PC 1): stays on the main account, keeps donating to open requests, and loots "
-                            "until full whenever its elixir drops below the trigger limit (then donates again)",
+                            "when its elixir drops at least the trigger amount below full storage it loots until "
+                            "full, and the partner loots too",
+             "donate_only": "2-PC Donor (PC 1): stays on the main account, keeps donating to open requests, and once "
+                            "there are no pending requests to donate and its elixir is at least the trigger amount "
+                            "below full storage, loots until full (then donates again)",
              "request_only": "2-PC Requester (PC 2): keeps requesting troops across the requesting accounts only "
                              "(never loots or donates; any unfilled previous request is replaced automatically)"}
 
@@ -1172,8 +1174,9 @@ class Window(QMainWindow):
             return c
 
         g = section("XpIncrease & 2-PC Donate", "users", left)
-        g.addWidget(_label("XpIncrease (1 PC): the main account donates when its elixir >= trigger limit while "
-                           "partner and top accounts request; below that it loots and the partner loots too. "
+        g.addWidget(_label("XpIncrease (1 PC): the main account donates while its elixir is within the drop limit of "
+                           "full storage, while partner and top accounts request; once elixir drops by that amount "
+                           "below full storage it loots and the partner loots too. "
                            "2 PCs: run 'Donate + loot (PC 1)' on the donor PC (only uses Main account) and "
                            "'Request only (PC 2)' on the requester PC (skips Main account if set, or set Main "
                            "account to 'None (other PC)' if PC 2 only lists requesting accounts).", "help", wrap=True),
@@ -1187,7 +1190,8 @@ class Window(QMainWindow):
         need = spin("donate_need", min(int(d.get("need", 3000000) or 0), 100_000_000), 0, 100_000_000)
         need.setSingleStep(100_000)
         need.setGroupSeparatorShown(True)
-        row(g, "Loot when elixir goes below", "30,00,000 = 30 lakh. Below this the main account loots until full", need)
+        row(g, "Loot when below full storage by", "30,00,000 = 30 lakh. Loots when elixir drops this much below "
+                                                  "full storage (in 2-PC mode, once no requests are pending)", need)
         row(g, "Check requests every (PC 1)", "2-PC Donor mode: wait between clan chat checks when nothing was donated",
             spin("donate_poll_seconds", int(d.get("poll_seconds", 15) or 15), 3, 300, " s"))
         row(g, "Empty the Clan Castle first", "Before each request, so the castle has room",
