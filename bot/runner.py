@@ -109,7 +109,7 @@ def loot_account(bot, acc):
     if not with_recovery(bot, f"switch to {acc['name']}", lambda: account_actions.switch_to(bot, acc)):
         log.error("Skipping %s: could not switch to it", acc["name"])
         bot.progress.setdefault(acc["name"], {})["status"] = "skipped"
-        return
+        return None
 
     def run():
         if bot.current_account != acc["name"]:        # a reload opened another account meanwhile
@@ -120,10 +120,12 @@ def loot_account(bot, acc):
     bot.progress.setdefault(acc["name"], {})["status"] = result or "skipped"
     if result:
         log.info("%s: %s", acc["name"], RESULTS.get(result, result))
+    return result
 
 
 MODES = {"loot": "Loot all accounts", "raid": "Clan Capital raids", "raid_loot": "Raids, then loot",
-         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "Loot + donate"}
+         "loot_upgrade": "Loot + upgrade", "loot_walls": "Loot + walls", "loot_donate": "XpIncrease",
+         "donate_only": "Donate + loot (PC 1)", "request_only": "Request only (PC 2)"}
 
 
 def raid_account(bot, acc):
@@ -181,6 +183,31 @@ def walls_account(bot, acc):
     return n or 0
 
 
+def walls_until_done(bot, acc):
+    """Loot + walls on one account until its walls are done: walls with what is above the keep, loot until full,
+    walls, loot until full, walls, ... The next account comes when full storages upgrade no wall (every wall is
+    upgraded, the rest waits for a free builder, or one wall costs more than the storages hold above the keep), or
+    when looting stops (no army, attack limit, no gold to search, the account could not be opened)."""
+    name = acc["name"]
+    total = walls_account(bot, acc)                    # what is already above the keep: room for the loot
+    n = 0
+    while True:                                        # no round limit: only the walls or the looting end it
+        n += 1
+        control.checkpoint()
+        result = loot_account(bot, acc)
+        done = walls_account(bot, acc) if result else 0
+        total += done
+        if result not in ("full", "stuck"):
+            log.info("%s: looting stopped (%s) after %d wall(s) - next account", name,
+                     RESULTS.get(result, result) if result else "the account could not be looted", total)
+            return
+        if not done:
+            log.info("%s: %s - %d wall(s) upgraded on it, next account", name,
+                     getattr(bot, "walls_note", "") or "no wall could be upgraded", total)
+            return
+        log.info("%s: loot + walls round %d: %d wall(s) upgraded (%d so far) - looting again", name, n, done, total)
+
+
 def run_accounts(bot, start_from=1, rounds=1, mode="loot"):
     """Every enabled account in accounts.json order, from account #start_from; `rounds` times (0 = forever).
     Raids only happen on Raid Weekend; in "raid" mode an account without raid attacks left is not opened at
@@ -188,6 +215,12 @@ def run_accounts(bot, start_from=1, rounds=1, mode="loot"):
     from there) and is back at 1 after a whole round."""
     if mode == "loot_donate":
         donate.run(bot)                                # its own cycle, always from the main account
+        return
+    if mode == "donate_only":
+        donate.run_donor(bot)                          # 2-PC Donor PC: donates & loots main account only
+        return
+    if mode == "request_only":
+        donate.run_requester(bot)                      # 2-PC Requester PC: requests only in a loop
         return
     order = [(i, a) for i, a in enumerate(bot.accounts, 1) if a.get("enabled", True)]
     if not order:
@@ -220,16 +253,15 @@ def run_accounts(bot, start_from=1, rounds=1, mode="loot"):
             log.info("== #%d %s", pos, acc["name"])
             if raid_now:
                 raid_account(bot, acc)
+            if walling:
+                walls_until_done(bot, acc)             # walls, loot, walls, loot ... on this account until done
+                continue
             if upgrading:
                 upgrade_account(bot, acc)              # spend first: room in the storages for the loot
-            if walling:
-                walls_account(bot, acc)                # the same with walls
             if looting:
                 loot_account(bot, acc)
             if upgrading:
                 upgrade_account(bot, acc)              # then what was looted
-            if walling:
-                walls_account(bot, acc)                # full: the loot into walls
         start_from = bot.start_from = 1                # only the first round skips accounts
 
 

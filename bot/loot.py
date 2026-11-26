@@ -102,15 +102,20 @@ def stable_loot(bot, max_wait=2.0):
     """The scouted loot, read until two reads 0.25 s apart agree: the numbers count up for a
     moment when a base appears, so a single early read could be too low."""
     end = time.monotonic() + max_wait
+    regions = {r: bot.layout.region(f"scout.{r}") for r in config.RESOURCES}
     prev = None
     while True:
-        frame = bot.shot()
-        loot = {r: vision.digits.read(frame, bot.layout.region(f"scout.{r}")) for r in config.RESOURCES}
+        loot = attack.enemy_loot(bot.shot(), regions)
         if prev is not None and loot == prev and loot.get("gold") is not None:
             return loot
         if time.monotonic() > end:
             # still changing or unreadable: one last careful read
-            return {r: bot.read_number(f"scout.{r}") for r in config.RESOURCES}
+            for _ in range(3):
+                if loot.get("gold") is not None:
+                    break
+                control.sleep(0.3)
+                loot = attack.enemy_loot(bot.shot(), regions)
+            return loot
         prev = loot
         control.sleep(0.25)
 
@@ -123,19 +128,21 @@ def search(bot, account):
         if key == "scout/end_battle" and not bot.wait("scout/next", timeout=4):
             # a base is shown but no Next: the gold for the next search is not there -> attack this one
             loot = stable_loot(bot)
-            log.info("Search %d: %s -> attack (no gold left for Next)", n, _fmt(loot))
+            event = _event(loot.pop("multiplier", 1))
+            log.info("Search %d: %s%s -> attack (no gold left for Next)", n, _fmt(loot), event)
             return loot
         if key is None:
             bot.save_error("no-scout")
             raise BotError("Scouting screen did not appear")
         bot.action = f"Searching #{n}"
         loot = stable_loot(bot)
+        event = _event(loot.pop("multiplier", 1))
         bot.stats["searches"] += 1
         bot.last_loot = loot
         if loot_is_good(bot.settings, loot, account):
-            log.info("Search %d: %s -> attack", n, _fmt(loot))
+            log.info("Search %d: %s%s -> attack", n, _fmt(loot), event)
             return loot
-        log.debug("Search %d: %s -> next", n, _fmt(loot))
+        log.debug("Search %d: %s%s -> next", n, _fmt(loot), event)
         bot.tap_point("scout.next")
         control.sleep(0.5)
     log.info("No base found in %d searches", max_searches)
@@ -221,6 +228,11 @@ def ensure_army(bot, account):
     else:
         log.info("%s: army set to the first saved recipe%s", account["name"], f" '{name}'" if name else "")
     return True
+
+
+def _event(mult):
+    """" (2x loot event)" when the base shows a loot multiplier."""
+    return f" ({mult}x loot event)" if mult and mult > 1 else ""
 
 
 def _fmt(d):

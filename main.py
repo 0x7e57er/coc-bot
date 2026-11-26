@@ -6,7 +6,7 @@
     python main.py --cli --from 5     start with account #5 (its place in accounts.json)
     python main.py --cli --rounds 0   go round the accounts forever
     python main.py --cli --mode raid  Clan Capital raids (or loot / raid_loot / loot_upgrade / loot_walls /
-                                      loot_donate; default: the window's choice)
+                                      loot_donate / donate_only / request_only; default: the window's choice)
     python main.py --check            only check the setup: start the game, read the resources, save a screenshot
 
 F9 pauses / continues, F10 stops. Pushing the mouse into a screen corner also stops it.
@@ -32,8 +32,9 @@ def main():
     p.add_argument("--start", action="store_true", help="the window: press Start at once")
     p.add_argument("--from", dest="start_from", type=int, help="start with account #N of accounts.json")
     p.add_argument("--rounds", type=int, help="rounds over all accounts (0 = forever)")
-    p.add_argument("--mode", choices=list(runner.MODES),
-                   help="loot / raid / raid_loot / loot_upgrade / loot_walls / loot_donate (default: settings.json)")
+    p.add_argument("--mode", choices=list(runner.MODES) + ["xpincrease"],
+                   help="loot / raid / raid_loot / loot_upgrade / loot_walls / xpincrease (or loot_donate) / "
+                        "donate_only / request_only (default: settings.json)")
     p.add_argument("--check", action="store_true", help="only check the setup (no attack)")
     p.add_argument("--debug", action="store_true", help="show every step in the console")
     args = p.parse_args()
@@ -53,7 +54,7 @@ def main():
         runner.check(settings, accounts)
         return
     if args.mode:
-        settings["mode"] = args.mode
+        settings["mode"] = "loot_donate" if args.mode == "xpincrease" else args.mode
     reason = runner.run(settings, accounts, start_from=args.start_from, rounds=args.rounds)
     sys.exit(0 if reason in ("finished", "stopped") else 1)
 
